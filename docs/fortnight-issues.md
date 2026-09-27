@@ -25,7 +25,7 @@ to every issue.
 
 ## Blocked
 
-- [ ] **#2 Tasks lines round-trip exactly** *(prefactor)*
+- [x] **#2 Tasks lines round-trip exactly** *(prefactor)* — done 27 Sep 2026; reads fields from the line's end exactly as Tasks does
   - AC:
     - The parser reads the status (`[ ]`, `[x]`, `[-]`), text, ⏳ 📅 🛫 ✅ 🔁 🆔 and priority emoji.
     - Serialising an unchanged line reproduces it byte-for-byte, including unknown emoji and trailing tags.
