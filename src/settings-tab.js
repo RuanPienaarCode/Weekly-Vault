@@ -29,6 +29,14 @@ class FortnightSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.name || '')
         .onChange(async v => { this.plugin.settings.name = v.trim(); await this.plugin.saveSettings(); }));
     new Setting(containerEl)
+      .setName('Colour')
+      .setDesc('Fortnight\'s own blue, or your Obsidian accent colour (Settings → Appearance → Accent color).')
+      .addDropdown(d => d
+        .addOption('blue', 'Blue')
+        .addOption('theme', 'Follow Obsidian\'s accent')
+        .setValue(this.plugin.settings.accent === 'theme' ? 'theme' : 'blue')
+        .onChange(async v => { this.plugin.settings.accent = v; await this.plugin.saveSettings(); }));
+    new Setting(containerEl)
       .setName('Daily welcome')
       .setDesc('The first time you open Fortnight each day: a greeting, then "Plan the week" or "Plan today", fading into the board.')
       .addToggle(t => t

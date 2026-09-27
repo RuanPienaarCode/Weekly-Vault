@@ -15,6 +15,8 @@ function mountBoard(view) {
   const root = view.contentEl;
   root.empty();
   root.addClass('fortnight');
+  const applyAccent = () => root.toggleClass('fn-blue', plugin.settings.accent !== 'theme');
+  applyAccent();
   /* The board redraws inside main; the welcome lies over it, untouched by
      a redraw underneath. */
   const main = root.createDiv({ cls: 'fn-main' });
@@ -434,6 +436,7 @@ function mountBoard(view) {
   }
 
   function render(tasks, rhythm) {
+    applyAccent();
     lastTasks = tasks;
     lastRhythm = rhythm;
     const board = planBoard({ today: D.todayISO(), tasks, rhythm, settings: plugin.settings });

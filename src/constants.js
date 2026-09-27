@@ -22,6 +22,8 @@ const DEFAULT_SETTINGS = {
      or "Plan today", fading into the board. lastWelcome is the day it last
      showed, so it shows once a day. */
   name: '',
+  /* 'blue' — Fortnight's own blue; 'theme' — Obsidian's accent colour. */
+  accent: 'blue',
   showWelcome: true,
   lastWelcome: '',
 };

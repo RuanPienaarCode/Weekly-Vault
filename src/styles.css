@@ -62,6 +62,12 @@
   --fn-thin-2: 400;
 }
 
+/* Fortnight's own blue (the default), in place of the theme's accent —
+   the pair the Hairline design was checked for contrast with. Settings →
+   Colour → "Follow Obsidian's accent" removes this class. */
+.fortnight.fn-blue { --fn-accent: #3350c4; --fn-hsl: 228, 58%, 48%; }
+.theme-dark .fortnight.fn-blue { --fn-accent: #8fa4ff; --fn-hsl: 228, 100%, 78%; }
+
 .fortnight button { font: inherit; color: inherit; }
 .fortnight .fn-ic { display: inline-flex; }
 .fortnight .fn-ic svg { width: 12px; height: 12px; }
