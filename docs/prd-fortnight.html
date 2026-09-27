@@ -150,7 +150,6 @@
         <tr><td>Time-blocking (placing cards on an hourly timeline)</td><td>Roughly doubles the work, and fights with dragging on a phone. Cards sit in day buckets; events still show their times.</td></tr>
         <tr><td>Writing events back to an external calendar</td><td>External calendars are read-only on the board.</td></tr>
         <tr><td>Subscribing to calendar feeds (ICS)</td><td>No calendar to subscribe to yet. v1 has only an empty settings slot; the import code can be reused from Rhythm later.</td></tr>
-        <tr><td>A Fortnight card on the Vista dashboard</td><td>Later integration, once the data model has settled.</td></tr>
         <tr><td>Swipe gestures on phone</td><td>They clash with Obsidian's sidebar swipes on iOS. The tap-for-a-sheet menu covers every move.</td></tr>
         <tr><td>A third week or longer horizon</td><td>Two weeks is the ritual. The "🛫 without ⏳" encoding already allows for more weeks later.</td></tr>
         <tr><td>Natural-language dates ("next thu")</td><td>A rabbit hole. Only a leading time is parsed ("14:00 dentist" becomes an event).</td></tr>
@@ -404,7 +403,7 @@ Plugin data { order: { "&lt;🆔&gt;": n }, settings: { plannerNote, includeFold
         <tr><td><strong>Nudge</strong> (<code>nudge-reminders</code>)</td><td><code>app.plugins.plugins['nudge-reminders'].store</code></td><td>Reminders (text, due, ⏰ time, priority, 🔁)</td><td><code>setDue</code>, <code>toggle</code>, <code>add</code></td><td>If Nudge isn't installed or disabled: its cards are hidden, with a quiet source-missing note. Its file is never edited directly.</td></tr>
         <tr><td><strong>Rhythm</strong> (<code>rhythm</code>)</td><td>The vault's metadata cache plus a copy of Rhythm's pure <code>model.js</code>/<code>dates.js</code> bundled into the plugin (as in Vista)</td><td>Practices (cadence, days), Log (<code>plan</code>, <code>done</code>), Events (<code>date</code>, <code>time</code>)</td><td>Patching Log frontmatter <code>plan</code>/<code>done</code>; creating Event notes; appending <code>## Review</code> to the Log body</td><td>If the Rhythm folders are absent: no tray, events come only from the planner, and the review goes to the configured folder. The bundled copy has to be refreshed deliberately when Rhythm's model changes.</td></tr>
         <tr><td><strong>Calendar feed (ICS)</strong></td><td>Not in v1: a settings slot only</td><td>—</td><td>—</td><td>—</td></tr>
-        <tr><td><strong>Vista</strong></td><td>Not in v1</td><td>—</td><td>—</td><td>Vista already sees events created here, because they are Rhythm Event notes.</td></tr>
+        <tr><td><strong>Vista</strong></td><td>A small read API on Fortnight (<code>plugin.board()</code>), used by a Vista card (issue #5b)</td><td>This week’s cards: today in full, a count per remaining day</td><td>Tapping the card opens Fortnight</td><td>Without Fortnight, Vista hides the card. Vista already sees events created here, because they are Rhythm Event notes.</td></tr>
       </tbody>
     </table></div>
   </section>

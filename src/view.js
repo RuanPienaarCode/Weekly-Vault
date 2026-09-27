@@ -1,30 +1,28 @@
 'use strict';
-/* The workspace view hosting the board. Empty until the board lands (#3). */
+/* The workspace view hosting the board. */
 
 const { ItemView } = require('obsidian');
 const { VIEW_TYPE, ICON } = require('./constants');
+const { mountBoard } = require('./board');
 
 class FortnightView extends ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.plugin = plugin;
-    this.navigation = true;
+    /* A dashboard: links opened from it go to another tab, never replace it. */
+    this.navigation = false;
   }
   getViewType() { return VIEW_TYPE; }
   getDisplayText() { return 'Fortnight'; }
   getIcon() { return ICON; }
 
   async onOpen() {
-    const root = this.contentEl;
-    root.empty();
-    root.addClass('fortnight');
-    const empty = root.createDiv({ cls: 'fn-empty' });
-    empty.createEl('h2', { text: 'Fortnight' });
-    empty.createEl('p', { text: 'Your two-week board will appear here.' });
+    this.ctl = mountBoard(this);
+    await this.ctl.start();
   }
 
   async onClose() {
-    this.contentEl.empty();
+    if (this.ctl) { this.ctl.stop(); this.ctl = null; }
   }
 }
 

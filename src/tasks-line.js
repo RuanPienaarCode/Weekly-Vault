@@ -35,6 +35,8 @@ const FIELDS = [
   { name: 'tag', re: /(^|\s)(#[^\s!@#$%^&*(),.?":{}|<>]+)$/u },
 ];
 const PRIORITY = { '🔺': 'highest', '⏫': 'high', '🔼': 'medium', '🔽': 'low', '⏬': 'lowest' };
+/* Sort weight, highest first; a line with no priority emoji is 'normal'. */
+const PRIORITY_RANK = { highest: 5, high: 4, medium: 3, normal: 2, low: 1, lowest: 0 };
 const TAG_ANYWHERE = /(^|\s)(#[^\s!@#$%^&*(),.?":{}|<>]+)/gu;
 /* The line's tail: an optional block reference (^id) and trailing space
    (including a CR left by a CRLF file). New tokens go in front of it, so
@@ -140,4 +142,4 @@ function setStatus(raw, ch) {
    Fortnight doesn't know. Done is [x]/[X]; cancelled is [-]. */
 const isOpen = t => !!t && !t.done && !t.cancelled;
 
-module.exports = { parseTask, isOpen, setField, setStatus };
+module.exports = { parseTask, isOpen, setField, setStatus, PRIORITY_RANK };

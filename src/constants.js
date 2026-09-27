@@ -9,6 +9,8 @@ const ICON = 'calendar-range';
 
 const DEFAULT_SETTINGS = {
   weekStart: 1,
+  /* Folders whose to-dos never appear, e.g. templates or an archive. */
+  excludeFolders: [],
 };
 
 module.exports = { VIEW_TYPE, ICON, DEFAULT_SETTINGS };

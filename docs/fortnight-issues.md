@@ -23,6 +23,10 @@ to every issue.
   - Out: any board logic; the GitHub remote (only on Ruan's say-so).
   - Blocked by: none
 
+## Order change (27 Sep 2026)
+
+Ruan's own plugins come first. Nudge and Rhythm cards now appear straight after the first board (#3b, #3c). #6 (Slipped) moves up to straight after #3b, because most of the dated to-dos in the target vault are overdue and would otherwise not show at all. Drag and tick (#4, #5) cover them too. A small Vista card joins v1 (#5b). #10, #11 and #12 keep only what's left of them.
+
 ## Blocked
 
 - [x] **#2 Tasks lines round-trip exactly** *(prefactor)* — done 27 Sep 2026; reads fields from the line's end exactly as Tasks does
@@ -34,12 +38,13 @@ to every issue.
   - Out: vault I/O.
   - Blocked by: #1
 
-- [ ] **#3 Dated to-dos appear on this week's days**
+- [x] **#3 Dated to-dos appear on this week's days** — done 27 Sep 2026; on Sunday a Today column stays in front of the week ahead (Q31)
   - AC:
     - `planBoard` puts a ⏳ line on its day.
     - A line with 📅 and no ⏳ shows on its due day with a deadline badge.
     - Mon–Sun window; on Sunday it jumps to next Monday.
     - Lines in excluded folders are ignored.
+    - Nudge's own note is skipped (Nudge reminders come through Nudge in #3b, so nothing appears twice).
     - Undated lines are ignored for now.
     - Each card shows its source note, and clicking it opens the line.
     - The view refreshes when files change.
@@ -47,23 +52,51 @@ to every issue.
   - Out: dragging, Next week and Later, events, Nudge, practices.
   - Blocked by: #2
 
+- [ ] **#3b Nudge reminders appear on the board**
+  - AC:
+    - Reminders are read through `app.plugins.plugins['nudge-reminders'].store`, never by parsing `Reminders.md` directly.
+    - An open reminder shows on its due day with a bell hint, and its ⏰ time if it has one.
+    - A reminder added in Nudge appears on the board without a manual reload.
+    - Without Nudge, its cards are hidden and a quiet note says so.
+  - In: Nudge adapter (read), bell hint, seam 2 tests with a stubbed Nudge store.
+  - Out: moving and ticking (#4, #5); Next week and Later for Nudge (#11).
+  - Blocked by: #3
+
+- [ ] **#3c Rhythm events and practices appear on the board**
+  - AC:
+    - Rhythm Event notes (`date`, `time`) show as locked cards on their day, sorted by time.
+    - The Practices owed tray lists weekly-cadence practices with a count of sessions not yet placed on a day.
+    - Each day shows a count of its daily practices.
+    - Read-only: nothing is written to Rhythm yet.
+  - In: a copy of Rhythm's `model.js`/`dates.js` bundled into the plugin (as in Vista), events and tray UI.
+  - Out: placing and ticking practices (#4, #5); creating events (#10).
+  - Blocked by: #3
+
 - [ ] **#4 Drag a to-do to another day**
   - AC:
     - Dropping a card on a day sets ⏳ to that date. 📅 is untouched.
     - If the line changed on disk since loading, the move is refused and the board reloads.
     - Seam 2 asserts the resulting file text.
-  - In: `store.move(card, {day})`, desktop drag and drop.
+  - In: `store.move(card, {day})`, desktop drag and drop. Nudge cards move through Nudge's `setDue`, keeping the ⏰ time. Dragging a practice from the tray onto a day writes Rhythm Log `plan`.
   - Out: reordering within a day (#8), Next week and Later (#7).
-  - Blocked by: #3
+  - Blocked by: #3, #3b, #3c
 
 - [ ] **#5 Tick a to-do done**
   - AC:
     - With Tasks installed, ticking calls `apiV1.executeToggleTaskDoneCommand`, so a 🔁 line produces its next occurrence exactly as Tasks would.
     - Without Tasks, it does a plain `[x]` tick and shows a one-time notice.
     - Done cards appear dimmed in a collapsed group at the bottom of their day.
-  - In: `store.tick`, Done group UI, seam 2 tests with a stubbed `apiV1`.
-  - Out: Nudge and practice ticks (#11, #12).
-  - Blocked by: #3
+  - In: `store.tick`, Done group UI, seam 2 tests with a stubbed `apiV1`. Nudge cards tick through Nudge's `toggle`; practice cards write Rhythm Log `done`.
+  - Blocked by: #3, #3b, #3c
+
+- [ ] **#5b Vista shows this week's plan**
+  - AC:
+    - Vista gets a small read-only "This week" card: today's cards and a count per remaining day, read from Fortnight.
+    - Tapping it opens Fortnight.
+    - Without Fortnight installed, the card is hidden.
+  - In: a small read API on the Fortnight plugin (`plugin.board()`), the card in ~/Github/vista-vault.
+  - Out: editing from Vista.
+  - Blocked by: #5
 
 - [ ] **#6 Slipped cards show at the top of Today; past days collapse**
   - AC:
@@ -104,37 +137,30 @@ to every issue.
   - Out: events (#10).
   - Blocked by: #7
 
-- [ ] **#10 Events show locked; "14:00 dentist" creates one**
+- [ ] **#10 "14:00 dentist" creates an event**
   - AC:
-    - Rhythm Event notes (`date`, `time`) show as locked cards on their day, sorted by time.
     - A quick-add with a leading `HH:MM`, or with the Event switch on, creates `Rhythm/Events/<name>.md` with that frontmatter.
     - Tapping an event opens a sheet to change its date or time (open question 6).
-  - In: event read and write (frontmatter only), locked-card UI.
+  - In: event write (frontmatter only).
   - Out: calendar feeds (only the settings slot).
   - Blocked by: #9
 
-- [ ] **#11 Nudge reminders are cards you can move and tick**
+- [ ] **#11 Nudge reminders in Next week and Later**
   - AC:
-    - Reminders are read through `app.plugins.plugins['nudge-reminders'].store`.
-    - Moving to a day calls `setDue` and keeps the ⏰ time.
     - Moving to Next week sets the due date to next Monday.
     - Moving to Later asks "stop reminding?" before clearing the due date.
-    - Ticking calls `toggle`.
     - `Reminders.md` is never written directly; seam 2 asserts this.
-    - Without Nudge, its cards are hidden and a quiet note says so.
-  - In: Nudge adapter, bell hint on cards.
+  - In: Nudge adapter (writes).
   - Out: creating Nudge reminders from Fortnight.
   - Blocked by: #5, #7
 
-- [ ] **#12 Practices owed tray**
+- [ ] **#12 Practices tray behaves fully**
   - AC:
-    - Weekly-cadence practices show with a count of sessions **not yet placed on a day** this week. Placing one lowers the count, and a fully placed practice leaves the tray.
-    - Dropping one on a day patches the Rhythm Log `plan` for that date.
-    - Ticking writes `done`.
-    - Each day shows a count of its daily practices.
+    - Placing a practice lowers its count, and a fully placed practice leaves the tray.
+    - Un-placing (dragging back to the tray) removes it from Rhythm Log `plan`.
     - Rhythm's Today view agrees, checked in the vault.
     - Log bodies are never rewritten (guard test).
-  - In: a copy of Rhythm's `model.js`/`dates.js` bundled into the plugin (as in Vista), the tray UI.
+  - In: tray behaviour on top of #3c and #4.
   - Out: sorting practices in the review (open question 4: no).
   - Blocked by: #4, #5
 

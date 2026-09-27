@@ -11,7 +11,9 @@
     --background-modifier-hover: #2e2e2e; --background-modifier-border: #383838; --text-accent: #7aa7ff; --interactive-accent: #5b7cfa; --text-on-accent: #fff; }
   body.theme-light { background: #e9e8e4; color: #222; --text-normal: #222; --text-muted: #666; --text-faint: #999; --background-primary: #fff; --background-secondary: #f4f4f4;
     --background-modifier-hover: #ececec; --background-modifier-border: #ddd; }
-  .frame { position: absolute; top: 18px; right: 18px; bottom: 18px; left: 18px; border-radius: 14px; overflow: auto; box-shadow: 0 10px 46px rgba(0,0,0,.5); background: var(--background-primary); }
+  .frame { position: absolute; top: 18px; right: 18px; bottom: 18px; left: 18px; border-radius: 14px; overflow: auto; box-shadow: 0 10px 46px rgba(0,0,0,.5); }
+  .frame > .view-content { min-height: 100%; }
+  body.theme-dark { --background-primary: #1e1e1e; }
   body.is-mobile .frame { max-width: 375px; margin: 0 auto; }
 </style>
 </head>

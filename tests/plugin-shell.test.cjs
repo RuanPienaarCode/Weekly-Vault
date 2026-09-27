@@ -21,6 +21,8 @@ class Plugin {
         revealLeaf: () => {},
         onLayoutReady: fn => fn(),
       },
+      vault: { on: () => ({}), getMarkdownFiles: () => [] },
+      metadataCache: { on: () => ({}) },
     };
   }
   registerView(type, factory) { this.views[type] = factory; }
@@ -28,6 +30,7 @@ class Plugin {
   addRibbonIcon(icon, title, cb) { this.ribbons.push({ icon, title, cb }); return {}; }
   addSettingTab() {}
   registerEvent() {}
+  registerInterval(id) { clearInterval(id); }
   async loadData() { return null; }
   async saveData() {}
 }
@@ -36,6 +39,7 @@ const stub = {
   PluginSettingTab: class PluginSettingTab {}, Setting: class Setting {}, Notice: class Notice {},
   Modal: class Modal {}, Menu: class Menu {}, setIcon: () => {}, normalizePath: p => p, Platform: { isMobile: false },
 };
+global.window = globalThis;
 const origLoad = Module._load;
 Module._load = function (request, ...rest) { return request === 'obsidian' ? stub : origLoad.call(this, request, ...rest); };
 

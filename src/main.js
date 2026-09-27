@@ -8,20 +8,69 @@
    (target safari15 — the real engine floor on mobile, not minAppVersion).
    ============================================================================ */
 
-const { Plugin } = require('obsidian');
+const { Plugin, Notice } = require('obsidian');
 const { VIEW_TYPE, ICON, DEFAULT_SETTINGS } = require('./constants');
 const { FortnightView } = require('./view');
+const { FortnightSettingTab } = require('./settings-tab');
+const { makeStore } = require('./store');
+const D = require('./dates');
 
 class FortnightPlugin extends Plugin {
   async onload() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.store = makeStore(this);
 
     this.registerView(VIEW_TYPE, leaf => new FortnightView(leaf, this));
     this.addRibbonIcon(ICON, 'Open Fortnight', () => this.activateView());
     this.addCommand({ id: 'open', name: 'Open Fortnight', callback: () => this.activateView() });
+    this.addSettingTab(new FortnightSettingTab(this.app, this));
+
+    /* Any note edited, anywhere (including on another device via sync):
+       re-read once things settle. The metadata cache fires after it has
+       re-indexed the note's task lines, so the reload sees the new state. */
+    const soon = () => this.refreshSoon();
+    this.registerEvent(this.app.metadataCache.on('changed', soon));
+    this.registerEvent(this.app.vault.on('delete', soon));
+    this.registerEvent(this.app.vault.on('rename', soon));
+    /* A board restored at startup may render before the metadata cache has
+       indexed the vault; reload once the layout (and cache) are ready. */
+    this.app.workspace.onLayoutReady(() => this.refreshSoon());
+    this.registerEvent(this.app.metadataCache.on('resolved', soon));
+
+    /* Past midnight the board moves on a day (and on Sunday, a week). */
+    this._day = D.todayISO();
+    this.registerInterval(window.setInterval(() => {
+      if (D.todayISO() !== this._day) { this._day = D.todayISO(); this.refreshViews(); }
+    }, 60 * 1000));
   }
 
-  async saveSettings() { await this.saveData(this.settings); }
+  onunload() {
+    window.clearTimeout(this._soon);
+  }
+
+  /* Settings are typed a key at a time: save each change, redraw once. */
+  async saveSettings() {
+    await this.saveData(this.settings);
+    this.refreshSoon();
+  }
+
+  boardViews() {
+    return this.app.workspace.getLeavesOfType(VIEW_TYPE).map(l => l.view).filter(v => v && v.ctl);
+  }
+
+  refreshViews() { for (const v of this.boardViews()) v.ctl.refresh(); }
+
+  refreshSoon() {
+    window.clearTimeout(this._soon);
+    this._soon = window.setTimeout(() => this.refreshViews(), 300);
+  }
+
+  /* Open the note a card lives in, at its line. */
+  async openTask(card) {
+    const file = this.app.vault.getFileByPath(card.path);
+    if (!file) { new Notice(`Fortnight: ${card.path} no longer exists.`); return; }
+    await this.app.workspace.getLeaf(false).openFile(file, { eState: { line: card.line } });
+  }
 
   /* Reuse an open Fortnight tab rather than stacking a second one. */
   async activateView() {
