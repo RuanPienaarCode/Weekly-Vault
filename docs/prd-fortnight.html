@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fortnight — Product Requirements</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel-2:#1d212b; --line:#2a2f3a;
+    --ink:#e7eaf0; --muted:#9aa3b2; --muted-2:#6f81a3;
+    --accent:#5b9dff; --accent-2:#7c5cff;
+    --crit:#f06464; --warn:#f5a524; --ok:#3ecf8e; --info:#5bb8ff;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --radius:12px; --maxw:1080px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:linear-gradient(180deg,#0c0e12,var(--bg) 240px);color:var(--ink);
+    font-family:var(--sans);line-height:1.6;font-size:16px;padding-bottom:4rem}
+  main{max-width:var(--maxw);margin:0 auto;padding:48px 24px 96px}
+  a{color:var(--accent)}
+  header.hero{padding:8px 0 28px;border-bottom:1px solid var(--line);margin-bottom:36px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  h1{font-size:34px;line-height:1.15;margin:10px 0 8px;letter-spacing:-.02em}
+  h1 .accent{color:var(--accent-2)}
+  .lede{color:var(--muted);font-size:17px;max-width:70ch;margin:0}
+  h2{font-size:23px;margin:46px 0 14px;letter-spacing:-.01em;border-left:3px solid var(--accent);padding-left:.6rem}
+  h3{font-size:17px;margin:26px 0 8px;color:var(--muted)}
+  p{margin:10px 0}
+  ul,ol{margin:10px 0;padding-left:22px} li{margin:5px 0}
+  .toc{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0;list-style:none;padding:0}
+  .toc a{font-size:13px;color:var(--muted);text-decoration:none;border:1px solid var(--line);padding:5px 11px;border-radius:999px}
+  .toc a:hover{color:var(--ink);border-color:var(--accent)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;margin:16px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  code{font-family:var(--mono);font-size:.88em;background:#10131a;border:1px solid var(--line);padding:1px 6px;border-radius:6px}
+  pre{background:#10131a;border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;overflow:auto;margin:12px 0;font-size:13.5px;line-height:1.55}
+  pre code{background:none;border:none;padding:0;font-size:inherit}
+  .tablewrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted-2);font-weight:600;font-size:12.5px;letter-spacing:.04em;text-transform:uppercase}
+  table.striped tbody tr:nth-child(odd){background:var(--panel)}
+  table.striped tbody tr:nth-child(even){background:var(--panel-2)}
+  a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .muted{color:var(--muted)}
+  svg{display:block}
+
+  /* badges & pills */
+  .badge{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.04em;padding:3px 10px;border-radius:999px;border:1px solid}
+  .badge.draft{color:var(--warn);border-color:rgba(245,165,36,.45);background:rgba(245,165,36,.12)}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;margin-right:6px;
+    color:var(--accent);border:1px solid rgba(91,157,255,.4);background:rgba(91,157,255,.1);vertical-align:1px}
+  .pill.later{color:var(--muted);border-color:var(--line);background:transparent}
+  .meta{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:16px;color:var(--muted);font-size:14px}
+
+  /* callouts */
+  .callout{border:1px solid var(--line);border-left:4px solid var(--info);background:var(--panel);border-radius:var(--radius);padding:14px 18px;margin:16px 0}
+  .callout.warn{border-left-color:var(--warn)}
+  .callout.ok{border-left-color:var(--ok)}
+  .callout p{margin:4px 0}
+
+  /* stories */
+  ul.stories{list-style:none;padding:0}
+  ul.stories li{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:8px 0}
+
+  /* phase cards */
+  .phases{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+  details.phase{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:0}
+  details.phase summary{cursor:pointer;list-style:none;padding:14px 16px;display:flex;gap:12px;align-items:baseline}
+  details.phase summary::-webkit-details-marker{display:none}
+  .pnum{font-family:var(--mono);font-weight:700;color:var(--accent-2);min-width:2.2em}
+  .ptitle{font-weight:700}
+  details.phase .pbody{padding:0 16px 14px;border-top:1px solid var(--line);font-size:14.5px}
+  details.phase .pbody h3{font-size:13px;text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px}
+  .toolbar{display:flex;gap:8px;margin:6px 0 10px}
+  .toolbar button{font:inherit;font-size:13px;color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:5px 12px;cursor:pointer}
+
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted-2);font-size:13px}
+</style>
+</head>
+<body>
+<main>
+  <!-- 1. Cover -->
+  <header class="hero">
+    <div class="eyebrow">Obsidian plugin · Product requirements</div>
+    <h1>Fortnight <span class="accent">— plan two weeks, live one day</span></h1>
+    <p class="lede">A planning board for Obsidian. You plan the next two weeks on Sunday, then adjust each morning and review each evening. It works over your existing Tasks lines, Nudge reminders and Rhythm practices, and doesn't need a store of its own.</p>
+    <div class="meta">
+      <span class="badge draft">Draft</span>
+      <span>Author: Ruan Pienaar (with Claude)</span>
+      <span>27 September 2026</span>
+      <span>Plugin id <code>fortnight-planner</code></span>
+    </div>
+    <nav aria-label="Contents">
+      <ul class="toc">
+        <li><a href="#problem">Problem</a></li>
+        <li><a href="#goals">Goals</a></li>
+        <li><a href="#non-goals">Non-goals</a></li>
+        <li><a href="#users">Users</a></li>
+        <li><a href="#stories">User stories</a></li>
+        <li><a href="#decisions">Technical decisions</a></li>
+        <li><a href="#testing">Testing</a></li>
+        <li><a href="#phases">Phases</a></li>
+        <li><a href="#data">Data model</a></li>
+        <li><a href="#integrations">Integrations</a></li>
+        <li><a href="#metrics">Success metrics</a></li>
+        <li><a href="#open">Open questions</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <!-- 2. Problem -->
+  <section id="problem">
+    <h2>Problem statement</h2>
+    <p>The vault already holds to-dos (Tasks lines scattered across notes), reminders (Nudge), recurring practices and events (Rhythm). But nowhere can you <strong>see the next two weeks as a whole and move things between days</strong>. Planning happens in your head, or not at all.</p>
+    <p>Who has it: one person who wants a weekly ritual (Sunday evening or Monday morning, planning two weeks ahead) and a daily one (adjust in the morning, review in the evening), on desktop and iPhone.</p>
+    <p>The cost of not solving it:</p>
+    <ul>
+      <li>Deadlines surface late.</li>
+      <li>Undone to-dos stay silently where they were, or get lost.</li>
+      <li>Weekly practices ("gym 3×/week") never get placed on actual days.</li>
+      <li>Nothing records what happened each day.</li>
+    </ul>
+    <p>Most open to-dos in the first target vault are undated, so a naive "show everything" board would bury you on the first day.</p>
+  </section>
+
+  <!-- 3. Goals -->
+  <section id="goals">
+    <h2>Goals</h2>
+    <ol>
+      <li><strong>Sunday session in under 15 minutes:</strong> look back, clear Later, and place this week's work on days and the rest into Next week, all in one guided flow.</li>
+      <li><strong>Nothing slips silently:</strong> every unfinished card from a past day is either sorted in the evening review or shown in Today's Slipped group. None disappears and none rolls over automatically.</li>
+      <li><strong>One source of truth:</strong> every to-do the board shows is a Tasks line or a Nudge reminder. Moving a card changes that line, so Tasks queries, Nudge and Rhythm all agree with the board.</li>
+      <li><strong>Phone-first daily use:</strong> "Plan today" and "Review today" each take under 2 minutes on an iPhone, with ≥44px touch targets and no cross-column dragging.</li>
+      <li><strong>A daily record:</strong> each evening review appends a done/moved/dropped summary, plus an optional reflection, to that day's log note.</li>
+      <li><strong>Weekly practices get placed:</strong> weekly-cadence Rhythm practices can be promised to days, and Rhythm's Today view honours those promises.</li>
+    </ol>
+  </section>
+
+  <!-- 4. Non-goals -->
+  <section id="non-goals">
+    <h2>Non-goals (v1)</h2>
+    <p class="muted">Each of these was explicitly deferred during the design interview.</p>
+    <div class="tablewrap"><table class="striped">
+      <thead><tr><th>Out of scope</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Time-blocking (placing cards on an hourly timeline)</td><td>Roughly doubles the work, and fights with dragging on a phone. Cards sit in day buckets; events still show their times.</td></tr>
+        <tr><td>Writing events back to an external calendar</td><td>External calendars are read-only on the board.</td></tr>
+        <tr><td>Subscribing to calendar feeds (ICS)</td><td>No calendar to subscribe to yet. v1 has only an empty settings slot; the import code can be reused from Rhythm later.</td></tr>
+        <tr><td>A Fortnight card on the Vista dashboard</td><td>Later integration, once the data model has settled.</td></tr>
+        <tr><td>Swipe gestures on phone</td><td>They clash with Obsidian's sidebar swipes on iOS. The tap-for-a-sheet menu covers every move.</td></tr>
+        <tr><td>A third week or longer horizon</td><td>Two weeks is the ritual. The "🛫 without ⏳" encoding already allows for more weeks later.</td></tr>
+        <tr><td>Natural-language dates ("next thu")</td><td>A rabbit hole. Only a leading time is parsed ("14:00 dentist" becomes an event).</td></tr>
+        <tr><td>Its own recurrence engine</td><td>Tasks owns 🔁. Ticking a card goes through Tasks' programming interface.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- 5. Users & access -->
+  <section id="users">
+    <h2>Users &amp; access model</h2>
+    <ul>
+      <li><strong>Single user, local-first.</strong> Everything happens inside the user's own Obsidian vault. There is no login, server, account or network access at runtime.</li>
+      <li><strong>Devices:</strong> desktop (the wide board, used for the Sunday session) and iPhone/iPad (a single-day view, used daily). Vault sync, such as iCloud, is the user's own and outside the plugin.</li>
+      <li><strong>Permissions:</strong> the plugin reads and writes only:
+        <ul>
+          <li>Tasks lines, anywhere in the vault</li>
+          <li>its planner note</li>
+          <li>Rhythm Log and Event notes, by appending or patching frontmatter only</li>
+          <li>its own plugin data</li>
+        </ul>
+        Nudge reminders are changed only through Nudge's own programming interface.</li>
+      <li><strong>Distribution:</strong> a public GitHub repo under AGPL-3.0, aimed at the Obsidian community store. Sample data and defaults are generic.</li>
+    </ul>
+  </section>
+
+  <!-- 6. User stories -->
+  <section id="stories">
+    <h2>User stories</h2>
+
+    <h3>The board</h3>
+    <ul class="stories">
+      <li><span class="pill">v1</span>As a planner, I want this week's seven days as columns, a <em>Next week</em> bucket and a <em>Later</em> pile, so that I see my fortnight at a glance.</li>
+      <li><span class="pill">v1</span>As a planner, I want the board to treat the <em>coming</em> Monday as "this week" from Sunday on, so that my Sunday session plans the week ahead.</li>
+      <li><span class="pill">v1</span>As a planner, I want days already gone this week shown as thin columns, so that the rest of the week gets the space.</li>
+      <li><span class="pill">v1</span>As a planner, I want to expand <em>Next week</em> into its seven days, so that I can pin something with a real date without planning the whole week in detail.</li>
+      <li><span class="pill">v1</span>As a planner, I want to drag a to-do between days, Next week and Later, so that rescheduling is one gesture.</li>
+      <li><span class="pill">v1</span>As a planner, I want each day to show events first, by time, and then to-dos in the order I dragged them, so that the day reads as it will happen.</li>
+      <li><span class="pill">v1</span>As a planner, I want a to-do with a deadline (📅) but no planned day to show on its due day with a deadline badge, so that deadlines can't hide.</li>
+      <li><span class="pill">v1</span>As a planner, I want completed cards dimmed in a collapsed group at the bottom of their day, so that I can see what I got through without clutter.</li>
+      <li><span class="pill">v1</span>As a planner, I want unhandled cards from past days shown in a <em>Slipped</em> group at the top of Today, so that nothing slips silently.</li>
+      <li><span class="pill">v1</span>As a planner, I want each card to show where it lives (which note, or a Nudge bell), so that I can open it in its note.</li>
+    </ul>
+
+    <h3>Cards</h3>
+    <ul class="stories">
+      <li><span class="pill">v1</span>As a planner, I want a quick-add field on every column with a To-do/Event switch, so that I can capture something straight into the right day.</li>
+      <li><span class="pill">v1</span>As a planner, I want "14:00 dentist" to become an event at 14:00, so that typing a time is enough.</li>
+      <li><span class="pill">v1</span>As a planner, I want new to-dos saved as Tasks lines in my planner note, so that Tasks queries find them.</li>
+      <li><span class="pill">v1</span>As a planner, I want new events saved as Rhythm Event notes, so that Rhythm and Vista see them too.</li>
+      <li><span class="pill">v1</span>As a planner, I want events shown locked (they can't be dragged), so that I don't move a real appointment by accident.</li>
+      <li><span class="pill">v1</span>As a planner, I want ticking a repeating to-do to create its next occurrence exactly as Tasks would, so that the planner and Tasks never disagree.</li>
+    </ul>
+
+    <h3>Sources</h3>
+    <ul class="stories">
+      <li><span class="pill">v1</span>As a planner, I want every <em>dated</em> open Tasks line in the vault on the board, so that I don't have to move my to-dos anywhere.</li>
+      <li><span class="pill">v1</span>As a planner, I want <em>undated</em> to-dos in Later only from my planner note and folders I choose, so that Later is a short list of real candidates, not my whole vault.</li>
+      <li><span class="pill">v1</span>As a planner, I want to exclude folders, so that templates and archives stay off the board.</li>
+      <li><span class="pill">v1</span>As a planner, I want my Nudge reminders shown as cards, and moving one to change its date through Nudge, so that Nudge keeps reminding me on the right day.</li>
+      <li><span class="pill">v1</span>As a planner, I want Rhythm Event notes shown as events on their day.</li>
+      <li><span class="pill later">later</span>As a planner, I want to subscribe to an iCloud or Google calendar feed, shown read-only, so that my appointments appear without retyping.</li>
+    </ul>
+
+    <h3>Rhythm practices</h3>
+    <ul class="stories">
+      <li><span class="pill">v1</span>As a planner, I want a <em>Practices owed</em> tray of my weekly-cadence Rhythm practices, showing how many are still unplaced, so that I can tell when the week is fully spread.</li>
+      <li><span class="pill">v1</span>As a planner, I want dragging a practice onto a day to record it as promised to that day in Rhythm's log, so that Rhythm's Today view agrees with the board.</li>
+      <li><span class="pill">v1</span>As a planner, I want ticking a practice card to record it as done in Rhythm's log.</li>
+      <li><span class="pill">v1</span>As a planner, I want daily practices shown only as a small count per day ("4 daily"), so that they don't flood every column.</li>
+    </ul>
+
+    <h3>Phone day view</h3>
+    <ul class="stories">
+      <li><span class="pill">v1</span>As a phone user, I want a one-day view with a day switcher, so that the board is usable on a 375px screen.</li>
+      <li><span class="pill">v1</span>As a phone user, I want tapping a card to open a sheet with <em>Today · Tomorrow · Pick a day · Next week · Later · Done · Drop</em>, so that every move is one tap away without dragging.</li>
+      <li><span class="pill">v1</span>As a phone user, I want to long-press and drag to reorder cards within the day.</li>
+    </ul>
+
+    <h3>Routines</h3>
+    <ul class="stories">
+      <li><span class="pill">v1</span>As a planner, I want a guided <strong>Plan the fortnight</strong> flow (look back → clear Later → place), with Skip on each step, so that the Sunday ritual has a shape.</li>
+      <li><span class="pill">v1</span>As a planner, I want a <strong>Plan today</strong> mode in the morning that shows today, Slipped and the most urgent Later items, so that I can pull things in and push things out.</li>
+      <li><span class="pill">v1</span>As a planner, I want a <strong>Review today</strong> mode in the evening that takes each unfinished card in turn and asks <em>tomorrow / pick a day / Later / drop</em>, so that each one gets a deliberate decision.</li>
+      <li><span class="pill">v1</span>As a planner, I want the review to append a <code>## Review</code> section (done / moved / dropped, plus an optional one-line reflection) to today's log note, so that I have a record of each day.</li>
+      <li><span class="pill">v1</span>As a planner, I want to choose which folder's day note receives the review (default: Rhythm's Log), so that it fits how I journal.</li>
+    </ul>
+  </section>
+
+  <!-- 7. Technical decisions -->
+  <section id="decisions">
+    <h2>Technical decisions</h2>
+    <div class="tablewrap"><table class="striped">
+      <thead><tr><th>Decision</th><th>Choice</th><th>Rationale</th><th>Alternatives rejected</th></tr></thead>
+      <tbody>
+        <tr><td>Product shape</td><td>A new, separate plugin. It reads Rhythm using a copy of Rhythm's pure logic bundled into the plugin, the same approach Vista takes.</td><td>Rhythm is about life priorities; Fortnight is a planner for to-dos and events with its own routines. Writing into Rhythm's log keeps the two boards in agreement.</td><td>Growing Rhythm's Plan tab into this planner</td></tr>
+        <tr><td>Board columns</td><td>This week Mon–Sun as day columns, <em>Next week</em> as one bucket that expands into days, and <em>Later</em></td><td>Planning day by day two weeks out is mostly redone the following Sunday. The bucket keeps next week rough but open to fixed dates.</td><td>14 fixed day columns; Next week as a bucket that can't expand</td></tr>
+        <tr><td>Week window</td><td>Calendar week starting Monday, jumping forward to the next Monday on Sunday. Past days collapse.</td><td>Matches a Sunday-or-Monday planning ritual; both see the same board.</td><td>Rolling today+6; strict calendar week with no Sunday jump</td></tr>
+        <tr><td>Card types</td><td><strong>To-do</strong> (can be moved) and <strong>Event</strong> (fixed, shows a time, locked)</td><td>Moving an event means changing a real appointment, so it shouldn't happen by accident.</td><td>A focus/intention card type; practices as a hand-made card type</td></tr>
+        <tr><td>Time granularity</td><td>Day buckets plus manual order within the day</td><td>Keeps v1 small and makes the phone view workable.</td><td>Time-blocking</td></tr>
+        <tr><td>Where a to-do is stored</td><td>A Tasks-format checkbox line. New ones go under <code>## Inbox</code> in <code>Planning/Fortnight.md</code> (configurable); existing lines stay in their own notes.</td><td>Tasks, Nudge and the rest of the vault already speak this format. No hidden store.</td><td>One note per card; the plugin's own data file</td></tr>
+        <tr><td>How placement is written</td><td>
+          <strong>Day:</strong> <code>⏳ YYYY-MM-DD</code> (scheduled)<br>
+          <strong>Next week:</strong> <code>🛫</code> next Monday, no ⏳<br>
+          <strong>Later:</strong> no ⏳ and no 🛫<br>
+          <strong>Deadline:</strong> <code>📅</code> is never changed by moving a card
+        </td><td>Uses Tasks' own vocabulary: 🛫 already means "not before". Expanding the bucket just adds a ⏳. A deadline stays visible when the planned day moves.</td><td>⏳ plus a <code>#nextweek</code> tag; keeping the week in plugin data</td></tr>
+        <tr><td>Due-only to-dos</td><td>A line with 📅 but no ⏳ shows on its due day with a deadline badge. Dragging adds ⏳ and keeps 📅.</td><td>Deadlines must never hide in Later.</td><td>Keeping them in Later until placed</td></tr>
+        <tr><td>Order within a day</td><td>Events first, by time. Then to-dos in manual order, stored in plugin data keyed by a Tasks <code>🆔</code> that is added <em>only</em> to lines the user reorders. Lines without a 🆔 fall back to priority (⏫🔼🔽).</td><td>Lines you never reorder stay untouched, and the order survives edits to a line's text.</td><td>Priority-only ordering; order by position in the file</td></tr>
+        <tr><td>Which to-dos appear</td><td>All <em>dated</em> open Tasks lines in the vault, minus excluded folders. <em>Undated</em> lines only from the planner note and chosen folders (none chosen by default). Plus Nudge reminders.</td><td>In the first target vault most open to-dos are undated; showing them all would flood Later.</td><td>Everything in Later, grouped; only tagged lines</td></tr>
+        <tr><td>Ticking done</td><td>Through Tasks' <code>apiV1.executeToggleTaskDoneCommand</code> when Tasks is installed, which handles 🔁 repeats and ✅ dates exactly as Tasks does. Without Tasks, a plain tick. Checked present in Tasks v8.4.0.</td><td>A second recurrence engine would disagree with Tasks.</td><td>The planner writing ticks and repeats itself</td></tr>
+        <tr><td>Nudge reminders</td><td>Read and changed <strong>only</strong> through <code>app.plugins.plugins['nudge-reminders'].store</code> (<code>setDue</code>, <code>toggle</code>, …)</td><td>Nudge owns its file and its notification schedule. Vista already uses this interface.</td><td>Editing <code>Reminders.md</code> directly</td></tr>
+        <tr><td>Rhythm practices</td><td>A <em>Practices owed</em> tray for weekly-cadence practices. The count is sessions <strong>not yet placed on a day</strong>, so the tray empties once the week is placed. Placing one writes Rhythm Log <code>plan</code>; ticking one writes <code>done</code>. Daily practices appear only as a count per day.</td><td>Weekly practices are the ones that need spreading across the week. Keeps Rhythm's Today view in agreement.</td><td>Every practice as a card; leaving practices out</td></tr>
+        <tr><td>Rhythm writes</td><td>Frontmatter patches and appends only; <strong>note bodies are never rewritten</strong> (Rhythm's own rule)</td><td>Rhythm's <code>io.js</code> guarantees the same, so both plugins can write the same Log note safely.</td><td>—</td></tr>
+        <tr><td>Adding cards</td><td>A quick-add field on each column with a To-do/Event switch. A leading <code>HH:MM</code> makes it an event. New events become Rhythm Event notes (<code>date</code>, <code>time</code> frontmatter).</td><td>Fast to type, and events stay visible to Rhythm and Vista.</td><td>Natural-language parsing; a modal form</td></tr>
+        <tr><td>Unfinished at day's end</td><td>The evening review sorts each one (tomorrow / pick a day / Later / drop). If you skip the review, cards stay on their day and show under Today's <em>Slipped</em>.</td><td>Silent auto-roll produces tasks that drift forward unnoticed for weeks.</td><td>Automatic roll to tomorrow</td></tr>
+        <tr><td>"Drop"</td><td>See open question 1</td><td>—</td><td>—</td></tr>
+        <tr><td>Review record</td><td>Append <code>## Review</code> to that day's note in <code>Rhythm/Log</code> (configurable, for example <code>Planning/Journal</code>)</td><td>Rhythm's Log is the day note actually in use, and appending is safe there.</td><td>Journal note by default; not recording the review at all</td></tr>
+        <tr><td>Phone interaction</td><td>Single-day view. Tap a card for the action sheet; long-press drag only reorders within the day.</td><td>Swipes conflict with iOS Obsidian's sidebars; dragging across columns fails at 375px.</td><td>Swipe gestures; swipes plus sheet</td></tr>
+        <tr><td>Sunday flow</td><td>Guided: look back → clear Later → place, with Skip on each step</td><td>The ritual is the reason the product exists.</td><td>The plain board with a banner</td></tr>
+        <tr><td>Look</td><td><strong>Variant A “Grouped”</strong> from <code>design/mockups.html</code>: each day is a rounded card on a grey ground, Rhythm’s Apple style. Two ideas taken from B: the review summary previews the exact text it will write to the log note, and the action sheet has an inline 14-day picker. Obsidian theme variables are used with Rhythm’s values as fallbacks, and the view sets its own background. The big title shows on phone only.</td><td>Clearly Rhythm’s sibling, a clear drop target per day, and it respects other themes.</td><td>B “Ledger” (denser, less like Rhythm); C “Today first”; Rhythm’s fixed palette; frosted glass</td></tr>
+        <tr><td>Platform floor</td><td>iOS 15 WebKit. No regex lookbehind, no Node APIs in <code>src/</code>, no <code>innerHTML</code>; <code>:has()</code> and container queries only with fallbacks.</td><td>The shared house rule across Ruan's plugins; one lookbehind kills the whole bundle on iOS.</td><td>—</td></tr>
+        <tr><td>Tooling</td><td>esbuild (CJS output, target safari15), <code>build.sh</code> (build → <code>node --check</code> → tests), <code>scripts/deploy.sh</code> with sha256 proof, and a <code>_preview</code> harness served on port 8824 (<code>fortnight-repo</code>)</td><td>Identical to Rhythm, Nudge and Vista, so the same skills and agents work unchanged.</td><td>—</td></tr>
+        <tr><td>Identity</td><td>Name <strong>Fortnight</strong>, id <code>fortnight-planner</code>, repo <code>~/Github/fortnight-vault</code>, public, AGPL-3.0-only. Checked free in the community store on 27 Sep 2026.</td><td>"Week Planner" is taken. A bare, generic id got Nudge overwritten by a store plugin once before.</td><td><code>week-planner</code>, <code>fortnight</code></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- 8. Testing -->
+  <section id="testing">
+    <h2>Testing decisions</h2>
+    <div class="grid2">
+      <div class="panel">
+        <h3 style="margin-top:0">Seam 1 — <code>planBoard()</code> (pure)</h3>
+        <p>Input: <code>{ today, tasks, reminders, practices, log, events, settings }</code>. Output: the board (columns → ordered cards, Slipped, Practices owed, daily counts). Most of the product's rules are tested here with in-memory fixtures:</p>
+        <ul>
+          <li>the Sunday jump</li>
+          <li>placement from ⏳, 🛫, 📅 or no date</li>
+          <li>which undated to-dos are included</li>
+          <li>ordering by 🆔 and priority</li>
+          <li>done and slipped grouping</li>
+          <li>practice cadence</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top:0">Seam 2 — <code>store</code> over a stand-in Obsidian app</h3>
+        <p>The stand-in fakes the vault, Tasks' <code>apiV1</code> and Nudge's <code>store</code>. Each test runs an action — <code>move</code>, <code>tick</code>, <code>reorder</code>, <code>add</code>, <code>writeReview</code> — and asserts:</p>
+        <ul>
+          <li>the resulting <strong>file text</strong>, for example that the line gained ⏳ and kept 📅, or that the Log body was untouched and <code>## Review</code> appended</li>
+          <li>the <strong>calls to the other plugins</strong>, for example that a Nudge move went through <code>setDue</code> and a tick went through Tasks</li>
+        </ul>
+      </div>
+    </div>
+    <p><strong>Guards:</strong> <code>ios-hazards.test.cjs</code> (copied from the sibling repos) and a "never rewrites a note body" check.</p>
+    <p><strong>Not unit-tested:</strong> the screens (board, phone view, routines). They are checked in the <code>_preview</code> harness on port 8824, then in the real vault.</p>
+    <div class="callout ok"><p><strong>What a good test looks like here:</strong> it exercises behaviour through <code>planBoard()</code> or <code>store</code> only, and asserts board output, file text or calls to the other plugins. It never reaches into internal helpers.</p></div>
+    <h3>Prior art to mirror</h3>
+    <ul>
+      <li><code>rhythm-vault/tests/model.test.cjs</code>: <code>planDay()</code> over fixture weeks. This is the shape for Seam 1.</li>
+      <li><code>nudge-vault/tests/store.test.cjs</code> with <code>_stub.cjs</code>: the store over a stand-in vault. This is the shape for Seam 2.</li>
+      <li><code>nudge-vault/tests/tasks.test.cjs</code>: parsing and serialising Tasks lines.</li>
+      <li><code>*/tests/ios-hazards.test.cjs</code>: copy it unchanged.</li>
+      <li>Test runner: <code>scripts/run-tests.mjs</code>, plain Node, no framework.</li>
+    </ul>
+    <h3>Where the critical-path coverage sits</h3>
+    <ul>
+      <li>Tasks line parse and serialise, round-tripping unknown emoji and text byte-for-byte</li>
+      <li>Placement and week-window rules (Seam 1)</li>
+      <li>Moves and ticks, and how each is routed to Tasks, Nudge or Rhythm (Seam 2)</li>
+      <li>Review writer (Seam 2)</li>
+    </ul>
+  </section>
+
+  <!-- 9. Phases -->
+  <section id="phases">
+    <h2>Phased delivery plan</h2>
+    <p class="muted">Each phase can be used on its own before the next begins. v1 = phases 0–7.</p>
+    <div class="toolbar"><button type="button" id="expand-all">Expand all</button><button type="button" id="collapse-all">Collapse all</button></div>
+    <div class="phases">
+      <details class="phase"><summary><span class="pnum">P0</span><span class="ptitle">Repo scaffold</span></summary><div class="pbody">
+        <h3>Delivers</h3><p>The <code>fortnight-vault</code> repo with the sibling toolchain (esbuild, build.sh, test runner, ios-hazards, deploy.sh, _preview harness, <code>fortnight-repo</code> launch entry on port 8824), manifest, LICENSE, and an empty view registered in Obsidian.</p>
+        <h3>Unlocks</h3><p>Everything else.</p>
+        <h3>Acceptance</h3><ul><li><code>./build.sh</code> is green.</li><li>The plugin loads in the vault and the view opens (empty).</li><li>The preview serves on port 8824.</li></ul>
+      </div></details>
+      <details class="phase"><summary><span class="pnum">P1</span><span class="ptitle">Tasks lines + board model</span></summary><div class="pbody">
+        <h3>Delivers</h3><p>A Tasks line parser and serialiser, and <code>planBoard()</code> with the week window, placement, undated filtering, ordering, and done/slipped grouping.</p>
+        <h3>Unlocks</h3><p>Store reads, and every screen.</p>
+        <h3>Acceptance</h3><ul><li>Seam 1 tests are green for every placement rule in §7.</li><li>Unknown emoji and text round-trip byte-for-byte.</li></ul>
+      </div></details>
+      <details class="phase"><summary><span class="pnum">P2</span><span class="ptitle">Store reads</span></summary><div class="pbody">
+        <h3>Delivers</h3><p>Loading Tasks lines vault-wide (with excluded and included folders), Nudge reminders through its store, Rhythm practices, Log entries and Events through the bundled copy of Rhythm's logic, and live refresh when files change.</p>
+        <h3>Unlocks</h3><p>A read-only board over real data.</p>
+        <h3>Acceptance</h3><ul><li>Seam 2 read tests are green.</li><li>Missing Tasks, Nudge or Rhythm plugins degrade gracefully, with a named source-missing notice.</li></ul>
+      </div></details>
+      <details class="phase"><summary><span class="pnum">P3</span><span class="ptitle">Store writes</span></summary><div class="pbody">
+        <h3>Delivers</h3><p><code>move</code> (⏳, 🛫, or clearing both), <code>tick</code> (through Tasks, Nudge or the Rhythm log), <code>reorder</code> (🆔 plus stored order), and <code>add</code> (a line in the planner note under <code>## Inbox</code>, or a new Rhythm Event note).</p>
+        <h3>Unlocks</h3><p>Interactive screens.</p>
+        <h3>Acceptance</h3><ul><li>Seam 2 write tests assert file text and calls to the other plugins.</li><li>No note body is rewritten (guard is green).</li></ul>
+      </div></details>
+      <details class="phase"><summary><span class="pnum">P4</span><span class="ptitle">Desktop board</span></summary><div class="pbody">
+        <h3>Delivers</h3><p>The day columns, Next week bucket (expandable) and Later; the Practices owed tray; drag and drop; quick-add; locked events; deadline badges and source hints; Slipped and Done groups. In the chosen design variant.</p>
+        <h3>Unlocks</h3><p>A usable Sunday session done by hand.</p>
+        <h3>Acceptance</h3><ul><li>Clicked through in the preview on port 8824.</li><li>Deployed to the vault; dragging a card changes the source line, and Tasks queries reflect it.</li></ul>
+      </div></details>
+      <details class="phase"><summary><span class="pnum">P5</span><span class="ptitle">Phone day view</span></summary><div class="pbody">
+        <h3>Delivers</h3><p>A single-day view with a day switcher; the tap-to-open action sheet (Today · Tomorrow · Pick a day · Next week · Later · Done · Drop); long-press reorder; automatic layout switch on narrow screens.</p>
+        <h3>Unlocks</h3><p>Daily use on iPhone.</p>
+        <h3>Acceptance</h3><ul><li>At 375px: no horizontal scroll and ≥44px touch targets.</li><li>Works on an actual iPhone.</li><li>obsidian-mobile-safety-reviewer finds nothing blocking.</li></ul>
+      </div></details>
+      <details class="phase"><summary><span class="pnum">P6</span><span class="ptitle">Review today + Plan today</span></summary><div class="pbody">
+        <h3>Delivers</h3><p>The evening sort, one unfinished card at a time, with an optional reflection; the <code>## Review</code> append to the configured log folder; the morning Plan today mode.</p>
+        <h3>Unlocks</h3><p>The daily ritual.</p>
+        <h3>Acceptance</h3><ul><li>The review's output in the Log note matches the Seam 2 expected text.</li><li>Skipping the review leaves cards visible in Slipped the next day.</li></ul>
+      </div></details>
+      <details class="phase"><summary><span class="pnum">P7</span><span class="ptitle">Plan the fortnight</span></summary><div class="pbody">
+        <h3>Delivers</h3><p>The guided Sunday flow (look back → clear Later → place), with Skip on each step, opened from a command and a ribbon icon.</p>
+        <h3>Unlocks</h3><p>v1 complete.</p>
+        <h3>Acceptance</h3><ul><li>A full Sunday session is completed over real vault data.</li><li>All suites are green.</li><li>obsidian-plugin-auditor's verdict is RELEASE.</li></ul>
+      </div></details>
+    </div>
+  </section>
+
+  <!-- 10. Data model -->
+  <section id="data">
+    <h2>Data model sketch</h2>
+    <p>Fortnight stores almost nothing of its own. It is a view over other plugins' data plus a thin layer of ordering.</p>
+<pre><code>Card (in memory, built by planBoard)
+ ├─ kind: todo | event | practice
+ ├─ source ──► TasksLine   (file path, line no., original text)         1 card : 1 line
+ │           ► NudgeItem   (Nudge store id)                             1 card : 1 reminder
+ │           ► RhythmEvent (Rhythm/Events/*.md  — date, time)           1 card : 1 note
+ │           ► Practice    (Rhythm/Practices/*.md — cadence, days)      1 practice : 0..n cards/week
+ ├─ slot: day(YYYY-MM-DD) | nextWeek | later          ← derived from ⏳ / 🛫 / none
+ ├─ due?: YYYY-MM-DD                                   ← 📅, never changed by moves
+ └─ order?: number                                     ← from plugin data by 🆔
+
+TasksLine   "- [ ] text ⏳ 2026-09-30 📅 2026-10-02 🆔 f3k9"
+RhythmLog   Rhythm/Log/YYYY-MM-DD.md  frontmatter plan[] / done[]  + appended "## Review"
+Plugin data { order: { "&lt;🆔&gt;": n }, settings: { plannerNote, includeFolders[], excludeFolders[],
+              reviewFolder, weekStart: 1, calendarUrls: [] } }</code></pre>
+    <p class="muted">Slots: day → <code>⏳</code> · nextWeek → <code>🛫</code> = next Monday and no <code>⏳</code> · later → neither.</p>
+  </section>
+
+  <!-- 11. Integrations -->
+  <section id="integrations">
+    <h2>Integrations</h2>
+    <div class="tablewrap"><table class="striped">
+      <thead><tr><th>Integration</th><th>How it connects</th><th>Data pulled</th><th>Operations triggered</th><th>If it's missing or fails</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Tasks</strong> (obsidian-tasks-plugin)</td><td>Tasks-format lines in vault files; <code>app.plugins.plugins['obsidian-tasks-plugin'].apiV1</code></td><td>Open checkbox lines with ⏳ 📅 🛫 ✅ 🔁 🆔 and priority</td><td>Placement edits to the line (⏳, 🛫); ticking done through <code>executeToggleTaskDoneCommand</code></td><td>If Tasks isn't installed: the format is still read and written, and ticking is plain (no 🔁 handling), with a one-time notice. If a line changed since loading: the move is skipped and the board reloads.</td></tr>
+        <tr><td><strong>Nudge</strong> (<code>nudge-reminders</code>)</td><td><code>app.plugins.plugins['nudge-reminders'].store</code></td><td>Reminders (text, due, ⏰ time, priority, 🔁)</td><td><code>setDue</code>, <code>toggle</code>, <code>add</code></td><td>If Nudge isn't installed or disabled: its cards are hidden, with a quiet source-missing note. Its file is never edited directly.</td></tr>
+        <tr><td><strong>Rhythm</strong> (<code>rhythm</code>)</td><td>The vault's metadata cache plus a copy of Rhythm's pure <code>model.js</code>/<code>dates.js</code> bundled into the plugin (as in Vista)</td><td>Practices (cadence, days), Log (<code>plan</code>, <code>done</code>), Events (<code>date</code>, <code>time</code>)</td><td>Patching Log frontmatter <code>plan</code>/<code>done</code>; creating Event notes; appending <code>## Review</code> to the Log body</td><td>If the Rhythm folders are absent: no tray, events come only from the planner, and the review goes to the configured folder. The bundled copy has to be refreshed deliberately when Rhythm's model changes.</td></tr>
+        <tr><td><strong>Calendar feed (ICS)</strong></td><td>Not in v1: a settings slot only</td><td>—</td><td>—</td><td>—</td></tr>
+        <tr><td><strong>Vista</strong></td><td>Not in v1</td><td>—</td><td>—</td><td>Vista already sees events created here, because they are Rhythm Event notes.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- 12. Metrics -->
+  <section id="metrics">
+    <h2>Success metrics</h2>
+    <ul>
+      <li><strong>Ritual kept:</strong> in the four weeks after v1 ships, the Sunday flow is completed at least 3 times out of 4.</li>
+      <li><strong>Daily review kept:</strong> at least 5 <code>## Review</code> sections a week in Rhythm/Log over the same four weeks.</li>
+      <li><strong>Nothing silent:</strong> zero open to-dos with ⏳ more than 7 days in the past at any Sunday session.</li>
+      <li><strong>Timing:</strong> the Sunday flow takes ≤15 min and each daily mode ≤2 min, self-timed on the first three uses.</li>
+      <li><strong>Agreement:</strong> in each phase's click-through, the Tasks query, Nudge and Rhythm Today views show the same days as the board.</li>
+      <li><strong>Safety:</strong> no note body is ever rewritten. The guard test is green on every build, and no data-loss report appears in the first month.</li>
+    </ul>
+  </section>
+
+  <!-- 13. Open questions -->
+  <section id="open">
+    <h2>Open questions</h2>
+    <p class="muted">Not settled in the design interview. Each has a recommended default that stands unless changed.</p>
+    <div class="tablewrap"><table class="striped">
+      <thead><tr><th>#</th><th>Question</th><th>Recommended default</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>What does <strong>Drop</strong> do to a Tasks line?</td><td>Mark it cancelled (<code>- [-]</code>, which Tasks treats as cancelled), rather than deleting it. The text stays in its note and the action can be undone.</td></tr>
+        <tr><td>2</td><td>A Nudge reminder with a ⏰ time: to-do or event?</td><td>A to-do that shows its time, and can be moved. Moving it keeps the ⏰ time and changes the date through <code>setDue</code>.</td></tr>
+        <tr><td>3</td><td>Nudge cards moved to Next week or Later: Nudge has no 🛫, and removing the due date stops reminders.</td><td>Next week sets the due date to next Monday. Later asks for confirmation ("stop reminding?") before clearing the due date.</td></tr>
+        <tr><td>4</td><td>Does the evening review also sort unfinished <em>practices</em>?</td><td>No. Rhythm already tracks what's owed; unticked practices just drop back into the tray.</td></tr>
+        <tr><td>5</td><td>What exactly does <strong>Plan today</strong> show beyond Today and Slipped?</td><td>Today, Slipped, today's due deadlines, and the top 5 Later items (planner note first). A "pull in" button on each.</td></tr>
+        <tr><td>6</td><td>Can events be edited from the board?</td><td>Tap opens a sheet to change the date or time for planner-created (Rhythm) events. Calendar-feed events, once they exist, will be read-only.</td></tr>
+        <tr><td>7</td><td>Does the Sunday look-back write anything?</td><td>Yes: a short <code>## Fortnight plan</code> block appended to that Sunday's log note (what slipped, and how many cards were placed).</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <footer>
+    <p>Written 27 September 2026 from the design interview (Q1–Q26) and seam confirmation. Next step: <code>/to-issues</code>. Self-contained — no network at runtime.</p>
+  </footer>
+</main>
+<script>
+  document.getElementById('expand-all').addEventListener('click', function(){
+    document.querySelectorAll('details.phase').forEach(function(d){ d.open = true; });
+  });
+  document.getElementById('collapse-all').addEventListener('click', function(){
+    document.querySelectorAll('details.phase').forEach(function(d){ d.open = false; });
+  });
+</script>
+</body>
+</html>

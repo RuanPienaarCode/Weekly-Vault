@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+_preview/bundle.js
+_preview/fortnight.css
+# Build output — regenerated from src/ by ./build.sh; ships as release assets.
+/main.js
+/styles.css
+# Design mockups may hold real planning data — kept local.
+design/

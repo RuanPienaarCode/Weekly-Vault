@@ -1,0 +1,9 @@
+{
+  "id": "fortnight-planner",
+  "name": "Fortnight",
+  "version": "0.1.0",
+  "minAppVersion": "1.8.0",
+  "description": "Plan the next two weeks on a board, then adjust each morning and review each evening. Works over your Tasks lines, reminders and practices.",
+  "author": "Ruan Pienaar",
+  "isDesktopOnly": false
+}

@@ -1,0 +1,14 @@
+/* Fortnight — root styles.css is BUILD OUTPUT copied from src/styles.css.
+   Everything is scoped under .fortnight so the plugin never restyles Obsidian. */
+
+.fortnight .fn-empty {
+  max-width: 420px;
+  margin: 15vh auto 0;
+  padding: 0 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.fortnight .fn-empty h2 {
+  margin: 0 0 6px;
+  color: var(--text-normal);
+}
