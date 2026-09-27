@@ -32,6 +32,7 @@ class FortnightPlugin extends Plugin {
     this.registerEvent(this.app.metadataCache.on('changed', soon));
     this.registerEvent(this.app.vault.on('delete', soon));
     this.registerEvent(this.app.vault.on('rename', soon));
+    this.registerEvent(this.app.vault.on('create', soon));
     /* A board restored at startup may render before the metadata cache has
        indexed the vault; reload once the layout (and cache) are ready. */
     this.app.workspace.onLayoutReady(() => this.refreshSoon());

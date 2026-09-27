@@ -101,4 +101,29 @@ const WED = '2026-09-30';
   assert.deepStrictEqual(texts(b, '2026-10-01'), ['Top', 'Urgent', 'Plain A5', 'Plain B1', 'Plain B2', 'Low thing']);
 }
 
+/* 9. a Nudge reminder lands on its due day, carrying its time and source;
+      timed cards come first, by time */
+{
+  const nudge = (text, due, time, extra = {}) => Object.assign(
+    { source: 'nudge', path: 'Reminders.md', line: 3, text, due, time, priority: 'normal', done: false, raw: '' }, extra);
+  const b = planBoard({ today: WED, settings: {}, tasks: [
+    task('- [ ] Plain thing ⏳ 2026-10-01 ⏫', 'A.md', 1),
+    nudge('Phone the dentist', '2026-10-01', '09:30', { line: 4 }),
+    nudge('Collect parcel', '2026-10-01', '', { line: 5 }),
+    nudge('Early call', '2026-10-01', '07:45', { line: 6 }),
+    nudge('Already done', '2026-10-01', '', { done: true, line: 7 }),
+    nudge('Next month', '2026-10-30', ''),
+  ] });
+  assert.deepStrictEqual(texts(b, '2026-10-01'), ['Early call', 'Phone the dentist', 'Plain thing', 'Collect parcel']);
+  const c = day(b, '2026-10-01').cards[1];
+  assert.strictEqual(c.source, 'nudge');
+  assert.strictEqual(c.time, '09:30');
+  assert.strictEqual(c.key, 'Reminders.md:4');
+  assert.strictEqual(c.deadlineOnly, false);
+  assert.strictEqual(day(b, '2026-10-01').cards[2].source, 'tasks');
+  /* a reminder with only ⏳ sits on that day */
+  const p = planBoard({ today: WED, settings: {}, tasks: [nudge('Planned only', '', '', { scheduled: '2026-10-02' })] });
+  assert.deepStrictEqual(texts(p, '2026-10-02'), ['Planned only']);
+}
+
 console.log('plan-board OK');

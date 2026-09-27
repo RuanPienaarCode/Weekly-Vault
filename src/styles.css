@@ -31,6 +31,7 @@
   gap: 12px;
   padding: 14px 20px 0;
 }
+.fortnight .fn-problem { font-size: 12px; color: var(--fn-muted); }
 .fortnight .fn-range {
   font-size: 13px;
   font-weight: 600;
@@ -166,4 +167,8 @@
   color: var(--fn-muted);
 }
 .fortnight .fn-due { font-weight: 600; color: var(--fn-accent-text); }
+.fortnight .fn-time { font-weight: 600; color: var(--fn-accent-text); font-feature-settings: "tnum" 1; }
+.fortnight .fn-nudge { display: inline-flex; align-items: center; gap: 3px; }
+.fortnight .fn-ic { display: inline-flex; }
+.fortnight .fn-ic svg { width: 12px; height: 12px; }
 .fortnight .fn-due.is-now { color: var(--fn-orange); }

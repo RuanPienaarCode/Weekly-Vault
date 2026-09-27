@@ -52,12 +52,13 @@ Ruan's own plugins come first. Nudge and Rhythm cards now appear straight after 
   - Out: dragging, Next week and Later, events, Nudge, practices.
   - Blocked by: #2
 
-- [ ] **#3b Nudge reminders appear on the board**
+- [x] **#3b Nudge reminders appear on the board** — done 27 Sep 2026
   - AC:
     - Reminders are read through `app.plugins.plugins['nudge-reminders'].store`, never by parsing `Reminders.md` directly.
     - An open reminder shows on its due day with a bell hint, and its ⏰ time if it has one.
     - A reminder added in Nudge appears on the board without a manual reload.
-    - Without Nudge, its cards are hidden and a quiet note says so.
+    - Without Nudge installed, the board simply has no reminder cards. If Nudge is installed but can't be read, a quiet line above the board says so.
+    - A reminder with only ⏳ (no 📅) sits on its ⏳ day.
   - In: Nudge adapter (read), bell hint, seam 2 tests with a stubbed Nudge store.
   - Out: moving and ticking (#4, #5); Next week and Later for Nudge (#11).
   - Blocked by: #3

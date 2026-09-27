@@ -1,6 +1,6 @@
 /* Harness entry: mounts the REAL view (src/view.js) over an in-memory vault
    of generic sample notes, dated around today, through the REAL store.
-     ?theme=light   ?mobile=1   ?empty=1 */
+     ?theme=light   ?mobile=1   ?empty=1   ?nonudge=1 */
 const { FortnightView } = require('../src/view');
 const { makeStore } = require('../src/store');
 const { DEFAULT_SETTINGS } = require('../src/constants');
@@ -31,7 +31,12 @@ const files = q.get('empty') === '1' ? {} : {
   ].join('\n'),
   'Templates/Daily.md': `- [ ] Template placeholder ⏳ ${d(0)}`,
 };
-const app = makeApp(files);
+const reminders = [
+  { title: 'Phone the dentist', due: d(1), time: '09:30', done: false, priority: 'normal', line: 2, raw: '', tags: [] },
+  { title: 'Renew the licence disc', due: d(3), time: '', done: false, priority: 'high', line: 3, raw: '', tags: [] },
+];
+const nudgeStore = { isOurs: p => p === 'Reminders.md', path: () => 'Reminders.md', load: async () => ({ items: reminders }) };
+const app = makeApp(files, q.get('nonudge') === '1' ? {} : { 'nudge-reminders': { store: nudgeStore } });
 app.workspace = { getLeaf: () => ({ openFile: async (f, o) => alert(`Would open ${f.path} at line ${o.eState.line + 1}`) }) };
 
 const plugin = { app, settings: Object.assign({}, DEFAULT_SETTINGS, { excludeFolders: ['Templates'] }) };
