@@ -1,7 +1,7 @@
 # Vendored from Rhythm
 
 `model.js`, `dates.js` and `markdown.js` are copied **unchanged** from the Rhythm plugin
-(github.com/RuanPienaarCode/life-rhythm, commit `96138ed`, `src/`).
+(github.com/RuanPienaarCode/life-rhythm, commit `c3ad307`, `src/`).
 
 Fortnight reads Rhythm's notes with Rhythm's own parser and asks Rhythm's own model what is
 owed, so the two plugins can never disagree about a practice. Do not edit these files here:

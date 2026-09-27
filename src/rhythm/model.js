@@ -27,13 +27,18 @@ const isSnoozed = (log, iso, name) => entry(log, iso).snooze.has(name);
    gets spread instead of every flexible practice shouting on every day. */
 const isPlanned = (log, iso, name) => entry(log, iso).plan.has(name);
 
-/* The next day AFTER `from` that this practice is promised to, if any. */
-function plannedAhead(log, from, name, days = 21) {
-  for (let i = 1; i <= days; i++) {
-    const d = D.addDays(from, i);
+/* The next day AFTER `from` that this practice is promised to, if any —
+   bounded by `until` when given (a plan only quiets a practice within its
+   CURRENT period: a promise made for next week must leave this week's ask
+   alone). Without a bound, falls back to a 21-day scan. */
+function plannedAhead(log, from, name, until) {
+  const cap = until || D.addDays(from, 21);
+  let d = from;
+  for (;;) {
+    d = D.addDays(d, 1);
+    if (d > cap) return null;
     if (isPlanned(log, d, name)) return d;
   }
-  return null;
 }
 
 /* How many times a practice is promised inside a window. */
@@ -75,6 +80,16 @@ function cadenceLabel(c) {
   return `${c.times}× a ${c.per}`;
 }
 
+/* The last day of the period this cadence sits in right now — the end of
+   the week for weekly/N-per-week, the end of the month for monthly/
+   N-per-month, `date` itself for daily (which has no ahead-of-today period
+   to promise into). */
+function periodEnd(c, date, weekStart) {
+  if (c.per === 'week') { const d = D.weekDays(date, weekStart); return d[d.length - 1]; }
+  if (c.per === 'month') { const d = D.monthDays(date); return d[d.length - 1]; }
+  return date;
+}
+
 function parseDays(list) {
   const arr = Array.isArray(list) ? list : (list ? String(list).split(',') : []);
   const out = [];
@@ -104,7 +119,7 @@ function progress(p, log, date, weekStart) {
   /* Promised to today, or promised to a later day (in which case today
      stays quiet — the decision is already made). */
   const planned = isPlanned(log, date, p.name);
-  const deferredTo = planned ? null : plannedAhead(log, date, p.name);
+  const deferredTo = planned ? null : plannedAhead(log, date, p.name, periodEnd(c, date, weekStart));
   if (c.per === 'day') {
     const dueDay = !days.length || days.includes(D.dayKey(date));
     const due = dueDay && !doneToday && !skippedToday;
@@ -146,17 +161,35 @@ function sinceLabel(n, back = 90) {
   return `${Math.round(n / 30)} months ago`;
 }
 
+/* When this practice's own history begins: the earlier of the first date
+   it appears anywhere in the log (done, skipped, snoozed or planned) and
+   its `created` date, if either is known. Deliberately per-practice — the
+   log's overall first date belongs to whichever practice was tracked
+   first, not to one added this morning. */
+function practiceStart(p, log) {
+  let first = null;
+  if (log) for (const [k, e] of log) {
+    if (!D.isISO(k) || !e) continue;
+    const seen = (e.done && e.done.has(p.name)) || (e.skip && e.skip.has(p.name))
+      || (e.snooze && e.snooze.has(p.name)) || (e.plan && e.plan.has(p.name));
+    if (seen && (!first || k < first)) first = k;
+  }
+  const created = D.isISO(p.created) ? p.created : null;
+  if (first && created) return first < created ? first : created;
+  return first || created || null;
+}
+
 /* Consecutive days before `date` on which a daily practice was not done
    (capped) — the "you've missed this" signal. */
 function missedRun(p, log, date, cap = 7) {
   const days = parseDays(p.days);
-  /* Never count back past the first day the log knows about: a practice
-     added yesterday must not open with "Missed 7 days". */
-  let first = null;
-  if (log) for (const k of log.keys()) if (D.isISO(k) && (!first || k < first)) first = k;
-  if (!first) return 0;
+  /* Never count back past this practice's OWN start: a practice added
+     yesterday must not open with "Missed 7 days" borrowed from some other,
+     older practice's history. With no tick and no `created` at all, there
+     is no evidence it existed before today, so it starts today. */
+  const start = practiceStart(p, log) || date;
   let n = 0, d = D.addDays(date, -1);
-  while (n < cap && d >= first) {
+  while (n < cap && d >= start) {
     const dueDay = !days.length || days.includes(D.dayKey(d));
     if (dueDay) {
       if (logHas(log, d, p.name)) break;
@@ -377,13 +410,21 @@ function streak(log, date) {
    unfinished week never breaks it. */
 const GOOD_WEEK = 0.6;
 function weekStreak(data, date, weekStart) {
+  const ws = weekStart ?? 1;
+  /* A practice only counts toward a week if it existed for the whole of
+     that week — otherwise adding a new practice today rewrites the verdict
+     on every past week it was never part of. */
+  const forWeek = (d) => {
+    const practices = (data.practices || []).filter(p => (practiceStart(p, data.log) || date) <= d);
+    return weekReview({ ...data, practices }, d, ws);
+  };
   let n = 0;
-  let d = D.weekStart(date, weekStart ?? 1);
-  const cur = weekReview(data, d, weekStart ?? 1);
+  let d = D.weekStart(date, ws);
+  const cur = forWeek(d);
   if (cur.asked && cur.ratio >= GOOD_WEEK) n++;
   d = D.addDays(d, -7);
   for (let i = 0; i < 104; i++) {
-    const r = weekReview(data, d, weekStart ?? 1);
+    const r = forWeek(d);
     if (!r.asked || r.ratio < GOOD_WEEK) break;
     n++;
     d = D.addDays(d, -7);
@@ -398,7 +439,12 @@ function streakLabel(data, date, opts) {
     const n = weekStreak(data, date, opts && opts.weekStart);
     return n >= 1 ? `${n} good week${n === 1 ? '' : 's'} in a row` : '';
   }
-  const n = streak(data.log, date);
+  /* The run only breaks once a whole PAST day had no tick — before
+     anything is ticked today, show the run through yesterday rather than
+     letting an unticked "today" zero it out every morning. */
+  const today = entry(data.log, date);
+  const from = today.done && today.done.size ? date : D.addDays(date, -1);
+  const n = streak(data.log, from);
   return n >= 2 ? `${n} days in a row` : '';
 }
 
@@ -437,7 +483,12 @@ function shelf(data, from, n, opts) {
   const out = [];
   for (const p of (data.practices || []).filter(isFlexible)) {
     const pr = progress(p, data.log, from, weekStart);
-    const placed = plannedCount(data.log, from, n, p.name);
+    /* A promise only counts as "placed" if it falls inside THIS period —
+       a plan for next week must not quiet this week's need, even though
+       the rolling board window `n` reaches into next week. */
+    const c = parseCadence(p.cadence) || { per: 'day', times: 1 };
+    const bound = Math.max(0, Math.min(n, D.diffDays(from, periodEnd(c, from, weekStart)) + 1));
+    const placed = plannedCount(data.log, from, bound, p.name);
     const need = Math.max(0, pr.remaining - placed);
     if (need <= 0) continue;
     /* Pressure, not urgency: urgency goes to zero the moment something is

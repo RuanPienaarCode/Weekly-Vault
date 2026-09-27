@@ -394,5 +394,19 @@ const rhythm = { rhythm: { settings: {} } };
     assert.strictEqual(app.files.get('Home.md'), '- [ ] File tax ⏳ 2026-10-01 📅 2026-10-02');
   }
 
+  /* 16. a Rhythm log edited in Obsidian's Properties panel (block lists):
+         the list is replaced whole, never duplicated (Rhythm c3ad307) */
+  {
+    const app = makeApp({ 'Rhythm/Log/2026-10-02.md': '---\nrhythm: log\ndone:\n  - Read\nplan:\n  - Paint\n---\nNotes.\n' }, rhythm);
+    await makeStore({ app, settings: {} }).move({ source: 'practice', text: 'Gym', path: 'p', fromTray: true }, '2026-10-02');
+    const text = app.files.get('Rhythm/Log/2026-10-02.md');
+    assert.strictEqual((text.match(/^plan:/gm) || []).length, 1, text);
+    assert.strictEqual((text.match(/^done:/gm) || []).length, 1, text);
+    const { parseFrontmatter } = require('../src/rhythm/markdown');
+    assert.deepStrictEqual(parseFrontmatter(text).fm.plan, ['Paint', 'Gym']);
+    assert.deepStrictEqual(parseFrontmatter(text).fm.done, ['Read']);
+    assert.ok(text.endsWith('Notes.\n'), text);
+  }
+
   console.log('store-write OK');
 })().catch(e => { console.error(e); process.exit(1); });
