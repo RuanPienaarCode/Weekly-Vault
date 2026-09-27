@@ -23,6 +23,12 @@ function mountBoard(view) {
   let loading = null;
   let again = false;
   let showAllSlipped = false;
+  /* The day whose add field had focus, so it keeps it across a redraw and
+     several to-dos can be typed in a row. */
+  let addingOn = null;
+  /* What is typed in each day's add field, kept across redraws (a sync or
+     the previous add landing mid-typing must not wipe it). */
+  const drafts = new Map();
   /* Days whose Done group is open, by date. */
   const openDone = new Set();
   let lastTasks = [];
@@ -193,12 +199,49 @@ function mountBoard(view) {
     makeDropTarget(col, day.date);
     if (!day.cards.length) {
       card.createDiv({ cls: 'fn-empty-day', text: day.done.length ? 'All done' : 'Nothing planned' });
-      renderDone(card, day, board);
-      return;
+    } else {
+      const list = card.createEl('ul', { cls: 'fn-list' });
+      for (const c of day.cards) renderCard(list, c, board);
     }
-    const list = card.createEl('ul', { cls: 'fn-list' });
-    for (const c of day.cards) renderCard(list, c, board);
+    renderAdd(card, day);
     renderDone(card, day, board);
+  }
+
+  /* "+ Add a to-do": Enter writes it to the planner note with this day's ⏳. */
+  function renderAdd(card, day) {
+    const row = card.createDiv({ cls: 'fn-addrow' });
+    const plus = row.createSpan({ cls: 'fn-ic fn-add-ic' });
+    setIcon(plus, 'plus');
+    const input = row.createEl('input', {
+      cls: 'fn-addinput',
+      attr: { type: 'text', placeholder: 'Add a to-do', 'aria-label': `Add a to-do on ${DOW[D.weekday(day.date)]} ${short(day.date)}`, enterkeyhint: 'done' },
+    });
+    input.value = drafts.get(day.date) || '';
+    input.addEventListener('input', () => { if (input.value) drafts.set(day.date, input.value); else drafts.delete(day.date); });
+    input.addEventListener('focus', () => { addingOn = day.date; row.addClass('is-focused'); });
+    input.addEventListener('blur', () => { row.removeClass('is-focused'); window.setTimeout(() => { if (addingOn === day.date && !root.contains(document.activeElement)) addingOn = null; }, 0); });
+    input.addEventListener('keydown', async e => {
+      if (e.key === 'Escape') { input.value = ''; drafts.delete(day.date); input.blur(); addingOn = null; return; }
+      /* keyCode 229: WebKit's Enter that only confirms an IME word. */
+      if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+      e.preventDefault();
+      const text = input.value;
+      if (!text.trim() || input.disabled) return;
+      input.disabled = true;
+      let r;
+      try { r = await plugin.store.add({ text, date: day.date }); }
+      catch (err) { console.error('Fortnight: add failed', err); r = { ok: false, reason: 'error' }; }
+      if (!r.ok) {
+        input.disabled = false;
+        new Notice(`Fortnight: couldn't add that to-do (${r.reason === 'error' ? 'see the console' : r.reason}).`);
+        return;
+      }
+      /* Only what was sent is cleared; anything typed since stays. */
+      if (drafts.get(day.date) === text) drafts.delete(day.date);
+      addingOn = day.date;
+      await refresh();
+    });
+    if (addingOn === day.date) window.setTimeout(() => { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }, 0);
   }
 
   /* What you got through: collapsed under the day, a tap to open. */

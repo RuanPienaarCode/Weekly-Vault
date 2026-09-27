@@ -191,6 +191,73 @@ function makeStore(plugin) {
     return { ok: true };
   }
 
+  /* The planner note's path, tidied: one kind of slash, no "./" or leading
+     "/", and ".md" added — a path without it would create a file Obsidian
+     never lists as a note, so added to-dos would never show. */
+  function plannerPath() {
+    let p = String(plugin.settings.plannerNote || 'Planning/Fortnight.md').trim()
+      .replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^(\.\/|\/)+/, '');
+    if (!p || p.endsWith('/')) p += 'Fortnight.md';
+    return /\.md$/i.test(p) ? p : `${p}.md`;
+  }
+
+  /* Quick-add: a new Tasks line with the column's day as its ⏳, written at
+     the end of the planner note's "## Inbox" section (made if missing).
+     What was typed is kept, Tasks fields and all; only ⏳ is set, and a
+     typed checkbox isn't doubled. Every other line keeps its own ending,
+     and "#" lines inside code fences are not headings. */
+  async function add({ text, date }) {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim().replace(/^(?:[-*+] +)?\[.\] */, '');
+    if (!clean) return { ok: false, reason: 'empty' };
+    const line = L.setField(`- [ ] ${clean}`, 'scheduled', date);
+    const path = plannerPath();
+    const insert = textNow => {
+      const lines = textNow.split('\n');
+      const bare = l => l.replace(/\r$/, '');
+      const crOf = l => (l && l.endsWith('\r') ? '\r' : '');
+      /* Headings outside code fences, as [index, level, text]. */
+      const heads = [];
+      let fence = null;
+      lines.forEach((l, i) => {
+        const b = bare(l);
+        const f = b.match(/^\s*(```+|~~~+)/);
+        if (f) { fence = fence === null ? f[1][0] : (f[1][0] === fence ? null : fence); return; }
+        if (fence !== null) return;
+        const h = b.match(/^(#{1,6})\s+(.*?)\s*$/);
+        if (h) heads.push([i, h[1].length, h[2]]);
+      });
+      const inbox = heads.find(h => /^inbox$/i.test(h[2]));
+      if (!inbox) {
+        while (lines.length && bare(lines[lines.length - 1]) === '') lines.pop();
+        const cr = crOf(lines[lines.length - 1]);
+        lines.push(cr, `## Inbox${cr}`, line + cr, '');
+        return lines.join('\n');
+      }
+      const next = heads.find(h => h[0] > inbox[0] && h[1] <= inbox[1]);
+      const end = next ? next[0] : lines.length;
+      let at = inbox[0] + 1;
+      for (let i = inbox[0] + 1; i < end; i++) if (bare(lines[i]).trim()) at = i + 1;
+      lines.splice(at, 0, line + crOf(lines[at - 1]));
+      return lines.join('\n');
+    };
+    const file = app.vault.getFileByPath(path);
+    if (file) { await app.vault.process(file, insert); return { ok: true }; }
+    const parts = path.split('/').slice(0, -1);
+    for (let i = 1; i <= parts.length; i++) {
+      const dir = parts.slice(0, i).join('/');
+      if (!app.vault.getFolderByPath(dir)) await app.vault.createFolder(dir);
+    }
+    try {
+      await app.vault.create(path, `# Fortnight\n\n## Inbox\n${line}\n`);
+    } catch (e) {
+      /* Lost a race (a second add, or sync): write into the note that won. */
+      const now = app.vault.getFileByPath(path);
+      if (!now) throw e;
+      await app.vault.process(now, insert);
+    }
+    return { ok: true };
+  }
+
   async function doneOn(date, name) {
     const rr = rhythmRoot();
     const f = rr && app.vault.getFileByPath(`${rr.root}/${RHYTHM_FOLDERS.log}/${date}.md`);
@@ -258,7 +325,7 @@ function makeStore(plugin) {
     return { ok: false, reason: 'unknown' };
   }
 
-  return { load, loadRhythm, move, tick, problems: () => problems.slice() };
+  return { load, loadRhythm, move, tick, add, plannerPath, problems: () => problems.slice() };
 }
 
 module.exports = { makeStore };

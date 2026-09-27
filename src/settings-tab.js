@@ -9,6 +9,16 @@ class FortnightSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  /* A planner note inside an excluded folder: its to-dos would never show. */
+  warnIfHidden(el) {
+    const path = this.plugin.store.plannerPath();
+    const hidden = (this.plugin.settings.excludeFolders || []).find(f => {
+      const dir = String(f).replace(/^\/+|\/+$/g, '');
+      return dir && path.startsWith(dir + '/');
+    });
+    el.setText(hidden ? `The planner note is inside the excluded folder "${hidden}", so to-dos added from the board won't show on it.` : '');
+  }
+
   display() {
     const { containerEl } = this;
     containerEl.empty();
@@ -25,6 +35,19 @@ class FortnightSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.showWelcome !== false)
         .onChange(async v => { this.plugin.settings.showWelcome = v; await this.plugin.saveSettings(); }));
     new Setting(containerEl)
+      .setName('Planner note')
+      .setDesc('Where "Add a to-do" writes new to-dos, under an "## Inbox" heading. Created if it doesn\'t exist.')
+      .addText(t => t
+        .setPlaceholder('Planning/Fortnight.md')
+        .setValue(this.plugin.settings.plannerNote || '')
+        .onChange(async v => {
+          this.plugin.settings.plannerNote = v.trim() || 'Planning/Fortnight.md';
+          await this.plugin.saveSettings();
+          this.warnIfHidden(warning);
+        }));
+    const warning = containerEl.createDiv({ cls: 'setting-item-description mod-warning' });
+    this.warnIfHidden(warning);
+    new Setting(containerEl)
       .setName('Excluded folders')
       .setDesc('To-dos in these folders never appear on the board. One folder per line, e.g. Templates.')
       .addTextArea(t => t
@@ -33,6 +56,7 @@ class FortnightSettingTab extends PluginSettingTab {
         .onChange(async v => {
           this.plugin.settings.excludeFolders = v.split('\n').map(x => x.trim()).filter(Boolean);
           await this.plugin.saveSettings();
+          this.warnIfHidden(warning);
         }));
   }
 }

@@ -220,5 +220,93 @@ const rhythm = { rhythm: { settings: {} } };
     assert.strictEqual(app.files.get('Rhythm/Log/2026-10-02.md'), '---\nrhythm: log\ndone: []\nplan: [Gym]\n---\n');
   }
 
+  /* 13. quick-add writes a Tasks line with that day's ⏳ under "## Inbox"
+         in the planner note: at the end of that section, nothing else moved */
+  {
+    const app = makeApp({ 'Planning/Fortnight.md': '# Fortnight\n\n## Inbox\n- [ ] Earlier thing ⏳ 2026-09-29\n\n## Someday\n- [ ] Learn to sail\n' });
+    const store = makeStore({ app, settings: { plannerNote: 'Planning/Fortnight.md' } });
+    const r = await store.add({ text: '  Call   the plumber ', date: '2026-10-01' });
+    assert.deepStrictEqual(r, { ok: true });
+    assert.strictEqual(app.files.get('Planning/Fortnight.md'), '# Fortnight\n\n## Inbox\n- [ ] Earlier thing ⏳ 2026-09-29\n- [ ] Call the plumber ⏳ 2026-10-01\n\n## Someday\n- [ ] Learn to sail\n');
+  }
+
+  /* 13b. a planner note without an Inbox gets one at the end */
+  {
+    const app = makeApp({ 'Plan.md': '# My plan\nSome words.' });
+    await makeStore({ app, settings: { plannerNote: 'Plan.md' } }).add({ text: 'Buy bulbs', date: '2026-10-02' });
+    assert.strictEqual(app.files.get('Plan.md'), '# My plan\nSome words.\n\n## Inbox\n- [ ] Buy bulbs ⏳ 2026-10-02\n');
+  }
+
+  /* 13c. no planner note yet: created, folder and all */
+  {
+    const app = makeApp({});
+    await makeStore({ app, settings: {} }).add({ text: 'Buy bulbs', date: '2026-10-02' });
+    assert.strictEqual(app.files.get('Planning/Fortnight.md'), '# Fortnight\n\n## Inbox\n- [ ] Buy bulbs ⏳ 2026-10-02\n');
+  }
+
+  /* 13d. nothing typed: nothing written */
+  {
+    const app = makeApp({});
+    assert.deepStrictEqual(await makeStore({ app, settings: {} }).add({ text: '   ', date: '2026-10-02' }), { ok: false, reason: 'empty' });
+    assert.strictEqual(app.files.size, 0);
+  }
+
+  /* 13e. what you type is kept, Tasks fields included; the column's day
+          becomes (or replaces) its ⏳; a CRLF note stays CRLF */
+  {
+    const app = makeApp({ 'P.md': '## Inbox\r\n- [ ] A\r\n' });
+    const store = makeStore({ app, settings: { plannerNote: 'P.md' } });
+    await store.add({ text: 'File tax #admin 📅 2026-10-31', date: '2026-10-02' });
+    await store.add({ text: 'Moved ⏳ 2026-12-01', date: '2026-10-03' });
+    assert.strictEqual(app.files.get('P.md'), '## Inbox\r\n- [ ] A\r\n- [ ] File tax #admin 📅 2026-10-31 ⏳ 2026-10-02\r\n- [ ] Moved ⏳ 2026-10-03\r\n');
+  }
+
+  /* 13f. mixed line endings: only the new line is written; every other line
+          keeps its own ending */
+  {
+    const app = makeApp({ 'P.md': '# T\r\nline lf\nmore\r\n## Inbox\r\n- [ ] A\r\n' });
+    await makeStore({ app, settings: { plannerNote: 'P.md' } }).add({ text: 'B', date: '2026-10-01' });
+    assert.strictEqual(app.files.get('P.md'), '# T\r\nline lf\nmore\r\n## Inbox\r\n- [ ] A\r\n- [ ] B ⏳ 2026-10-01\r\n');
+  }
+
+  /* 13g. a "#" line inside a code fence is not a heading */
+  {
+    const app = makeApp({ 'P.md': '## Inbox\n- [ ] A\n```bash\n# install\nnpm i\n```\n\n## Later\n' });
+    await makeStore({ app, settings: { plannerNote: 'P.md' } }).add({ text: 'New', date: '2026-10-01' });
+    assert.strictEqual(app.files.get('P.md'), '## Inbox\n- [ ] A\n```bash\n# install\nnpm i\n```\n- [ ] New ⏳ 2026-10-01\n\n## Later\n');
+    const fenced = makeApp({ 'Q.md': 'Intro\n```\n## Inbox\n```\n' });
+    await makeStore({ app: fenced, settings: { plannerNote: 'Q.md' } }).add({ text: 'New', date: '2026-10-01' });
+    assert.strictEqual(fenced.files.get('Q.md'), 'Intro\n```\n## Inbox\n```\n\n## Inbox\n- [ ] New ⏳ 2026-10-01\n');
+  }
+
+  /* 13h. the planner path is tidied: ".md" added, "./" and "/" dropped */
+  {
+    for (const [setting, path] of [['Planning/Fortnight', 'Planning/Fortnight.md'], ['./Planning/F.md', 'Planning/F.md'], ['/Plan.md', 'Plan.md']]) {
+      const app = makeApp({});
+      await makeStore({ app, settings: { plannerNote: setting } }).add({ text: 'X', date: '2026-10-01' });
+      assert.deepStrictEqual([...app.files.keys()], [path], setting);
+    }
+  }
+
+  /* 13i. a typed checkbox isn't doubled */
+  {
+    const app = makeApp({});
+    const store = makeStore({ app, settings: {} });
+    await store.add({ text: '- [ ] Buy milk', date: '2026-10-01' });
+    await store.add({ text: '[ ] Buy eggs', date: '2026-10-01' });
+    assert.strictEqual(app.files.get('Planning/Fortnight.md'), '# Fortnight\n\n## Inbox\n- [ ] Buy milk ⏳ 2026-10-01\n- [ ] Buy eggs ⏳ 2026-10-01\n');
+  }
+
+  /* 13j. the note appears between our check and our create (a second add,
+          or sync): the add goes into the note that now exists */
+  {
+    const app = makeApp({});
+    const create = app.vault.create;
+    app.vault.create = async p => { await create(p, '# Theirs\n'); throw new Error('File already exists.'); };
+    const r = await makeStore({ app, settings: {} }).add({ text: 'Mine', date: '2026-10-01' });
+    assert.deepStrictEqual(r, { ok: true });
+    assert.strictEqual(app.files.get('Planning/Fortnight.md'), '# Theirs\n\n## Inbox\n- [ ] Mine ⏳ 2026-10-01\n');
+  }
+
   console.log('store-write OK');
 })().catch(e => { console.error(e); process.exit(1); });

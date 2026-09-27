@@ -139,7 +139,7 @@ Ruan's own plugins come first. Nudge and Rhythm cards now appear straight after 
   - Out: phone long-press reorder (#13).
   - Blocked by: #4
 
-- [ ] **#9 Quick-add a to-do to any column**
+- [ ] **#9 Quick-add a to-do to any column** — DAY columns done early, 27 Sep 2026 (Next week / Later columns come with #7)
   - AC:
     - Typing into a column's quick-add appends `- [ ] text` with that column's slot under `## Inbox` in the planner note.
     - The planner note and its heading are created if missing.

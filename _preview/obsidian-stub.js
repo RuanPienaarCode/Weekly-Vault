@@ -52,7 +52,7 @@ export class Menu {
 }
 export class Notice { constructor(msg) { console.log('[notice]', msg); } }
 /* A text glyph per icon name, so icon-only buttons are visible here. */
-const GLYPH = { circle: '○', 'check-circle-2': '✓', lock: '🔒', bell: '🔔', repeat: '↻', sun: '☀', calendar: '▦' };
+const GLYPH = { plus: '+', circle: '○', 'check-circle-2': '✓', lock: '🔒', bell: '🔔', repeat: '↻', sun: '☀', calendar: '▦' };
 export function setIcon(el, name) { el.textContent = GLYPH[name] || ''; }
 export const Platform = { isMobile: new URLSearchParams(location.search).get('mobile') === '1' };
 export const normalizePath = p => p.replace(/\\/g, '/').replace(/\/+$/, '');

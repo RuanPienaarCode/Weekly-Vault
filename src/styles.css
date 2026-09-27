@@ -294,6 +294,35 @@
 }
 .fortnight button.fn-done:hover { background: var(--background-modifier-hover, rgba(116, 116, 128, .08)); }
 
+/* Quick-add */
+.fortnight .fn-addrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 12px;
+  border-top: .5px solid var(--fn-hair);
+  color: var(--fn-muted);
+}
+.fortnight .fn-addrow.is-focused { background: hsla(var(--color-accent-hsl, 205, 40%, 36%), .08); }
+.fortnight .fn-add-ic { color: var(--fn-accent-text); }
+.fortnight .fn-add-ic svg { width: 16px; height: 16px; }
+.fortnight input.fn-addinput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+  font: inherit;
+  font-size: 15px;
+}
+.fortnight input.fn-addinput:focus { box-shadow: none; outline: none; }
+.fortnight input.fn-addinput::placeholder { color: var(--fn-muted); }
+
 .fortnight .fn-card {
   background: var(--fn-surface);
   border-radius: 11px;
