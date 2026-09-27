@@ -6,6 +6,7 @@
 const { parseFrontmatter, patchFrontmatter, buildNote } = require('./rhythm/markdown');
 const L = require('./tasks-line');
 const { plannerPathOf } = require('./plan');
+const D = require('./dates');
 const RD = require('./rhythm/dates');
 
 const NUDGE_ID = 'nudge-reminders';
@@ -293,15 +294,19 @@ function makeStore(plugin) {
     return isLaterSource(path) ? undated : L.addTag(undated, laterTag());
   }
 
-  function park(card, where, monday) { return once(card, () => parkNow(card, where, monday)); }
-  async function parkNow(card, where, monday) {
+  function park(card, where, monday, today = D.todayISO()) { return once(card, () => parkNow(card, where, monday, today)); }
+  async function parkNow(card, where, monday, today) {
     if (card.source === 'event') return { ok: false, reason: 'locked' };
     /* Reminders and practices need a day for now (#11, #12). */
     if (card.source !== 'tasks') return { ok: false, reason: 'needs-day' };
-    /* A 📅 deadline is never touched and keeps the card on its due day, so
-       parking it would change the note and claim a move that didn't happen. */
+    /* 📅 is never touched. Next week (🛫 its Monday) is fine for a deadline
+       already past or not before that Monday; one due sooner would be
+       hidden past its deadline. Later can't hold a dated card at all. */
     const t = L.parseTask(card.raw);
-    if (t && t.due) return { ok: false, reason: 'has-deadline' };
+    if (t && t.due) {
+      if (where === 'later') return { ok: false, reason: 'has-deadline' };
+      if (t.due >= today && t.due < monday) return { ok: false, reason: 'due-sooner', due: t.due };
+    }
     let after = null;
     const r = await editLine(card, raw => (after = parked(raw, where, monday, card.path)));
     /* Tagged: say so, with what it was, so the board can offer Undo. */

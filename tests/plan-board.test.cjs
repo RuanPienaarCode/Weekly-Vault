@@ -371,4 +371,16 @@ assert.strictEqual(planBoard({ today: '2026-10-04', tasks: [], settings: {} }).n
   assert.deepStrictEqual(b.later.map(c => c.text), ['Buy paint']);
 }
 
+/* 17. an overdue deadline parked in Next week (🛫 next Monday) waits in
+       "any day", not in Slipped — until its week comes */
+{
+  const parked = task('- [ ] Licence disc 📅 2026-07-31 🛫 2026-10-05', 'Cars.md', 2);
+  const b = planBoard({ today: WED, settings: {}, tasks: [parked] });
+  assert.deepStrictEqual(b.nextWeek.anyDay.map(c => c.text), ['Licence disc']);
+  assert.deepStrictEqual(b.slipped, []);
+  /* the week has come: it slips again, by its overdue 📅 */
+  const later = planBoard({ today: '2026-10-06', settings: {}, tasks: [parked] });
+  assert.deepStrictEqual(later.slipped.map(c => c.text), ['Licence disc']);
+}
+
 console.log('plan-board OK');

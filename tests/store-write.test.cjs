@@ -383,15 +383,22 @@ const rhythm = { rhythm: { settings: {} } };
     assert.deepStrictEqual(await store.revert({ path: 'W.md', line: 0 }, '- [ ] Slides #later', 'x'), { ok: false, reason: 'changed' });
   }
 
-  /* 15d. a card with a 📅 deadline can't be parked: 📅 is never touched,
-          so it would stay on its due day while we claimed otherwise */
+  /* 15d. deadlines and parking. 📅 is never touched, so:
+          - due before next Monday: Next week would hide it past its
+            deadline — refused ('due-sooner');
+          - already overdue, or due next week or later: Next week is fine;
+          - Later: refused while it has a 📅 ('has-deadline') */
   {
-    const app = makeApp({ 'Home.md': '- [ ] File tax ⏳ 2026-10-01 📅 2026-10-02' });
+    const app = makeApp({ 'Home.md': '- [ ] File tax ⏳ 2026-10-01 📅 2026-10-02\n- [ ] Licence disc 📅 2026-07-31\n- [ ] Book service 📅 2026-10-09' });
     const store = makeStore({ app, settings: {} });
-    const card = { source: 'tasks', path: 'Home.md', line: 0, raw: '- [ ] File tax ⏳ 2026-10-01 📅 2026-10-02', due: '2026-10-02' };
-    assert.deepStrictEqual(await store.park(card, 'later'), { ok: false, reason: 'has-deadline' });
-    assert.deepStrictEqual(await store.park(card, 'nextWeek', '2026-10-05'), { ok: false, reason: 'has-deadline' });
-    assert.strictEqual(app.files.get('Home.md'), '- [ ] File tax ⏳ 2026-10-01 📅 2026-10-02');
+    const soon = { source: 'tasks', path: 'Home.md', line: 0, raw: '- [ ] File tax ⏳ 2026-10-01 📅 2026-10-02' };
+    assert.deepStrictEqual(await store.park(soon, 'nextWeek', '2026-10-05', '2026-09-30'), { ok: false, reason: 'due-sooner', due: '2026-10-02' });
+    assert.deepStrictEqual(await store.park(soon, 'later', undefined, '2026-09-30'), { ok: false, reason: 'has-deadline' });
+    const overdue = { source: 'tasks', path: 'Home.md', line: 1, raw: '- [ ] Licence disc 📅 2026-07-31' };
+    assert.deepStrictEqual(await store.park(overdue, 'nextWeek', '2026-10-05', '2026-09-30'), { ok: true });
+    const ahead = { source: 'tasks', path: 'Home.md', line: 2, raw: '- [ ] Book service 📅 2026-10-09' };
+    assert.deepStrictEqual(await store.park(ahead, 'nextWeek', '2026-10-05', '2026-09-30'), { ok: true });
+    assert.strictEqual(app.files.get('Home.md'), '- [ ] File tax ⏳ 2026-10-01 📅 2026-10-02\n- [ ] Licence disc 📅 2026-07-31 🛫 2026-10-05\n- [ ] Book service 📅 2026-10-09 🛫 2026-10-05');
   }
 
   /* 16. a Rhythm log edited in Obsidian's Properties panel (block lists):

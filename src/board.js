@@ -65,7 +65,8 @@ function mountBoard(view) {
     'no-nudge': "Nudge isn't available",
     'no-rhythm': "Rhythm isn't available",
     'needs-day': 'reminders and practices need a day — drop it on one',
-    'has-deadline': 'it has a 📅 deadline, so it stays on its due day',
+    'has-deadline': 'it has a 📅 deadline — put it on a day instead, or remove the deadline in its note',
+    'due-sooner': "it's due before next week — put it on a day this week instead",
   };
 
   /* Tick a card done; the store routes it to Tasks, Nudge or Rhythm. */
@@ -96,7 +97,10 @@ function mountBoard(view) {
     catch (e) { console.error('Fortnight: move failed', e); r = { ok: false, reason: 'error' }; }
     if (!r.ok && r.reason !== 'busy') {
       console.warn('Fortnight: move refused', r.reason, card);
-      new Notice(`Fortnight: couldn't move "${card.text}" to ${dest.label}: ${REASON[r.reason] || 'something went wrong (see the console)'}.`);
+      const why = r.reason === 'due-sooner' && r.due
+        ? `it's due ${DOW[D.weekday(r.due)]} ${short(r.due)} — put it on a day before then instead`
+        : REASON[r.reason] || 'something went wrong (see the console)';
+      new Notice(`Fortnight: couldn't move "${card.text}" to ${dest.label}: ${why}.`);
     }
     /* Tagged in its own note: say where, and offer to take it back. */
     if (r.ok && r.tagged) undoNotice(card, r);
@@ -136,10 +140,13 @@ function mountBoard(view) {
         .setDisabled(d.date === card.date && !card.fromTray)
         .onClick(() => moveTo(card, d.date)));
     }
-    if (card.source === 'tasks' && !card.due) {
+    if (card.source === 'tasks') {
+      /* Same rules as the store: a deadline due before next week can't be
+         parked there, and Later takes no dated card. */
+      const dueSooner = card.due && card.due >= board.today && card.due < board.nextWeek.start;
       menu.addSeparator();
-      menu.addItem(i => i.setTitle('Next week (any day)').setIcon('calendar-range').setDisabled(card.slot === 'nextWeek' && !card.date).onClick(() => parkTo(card, nextDest(board))));
-      menu.addItem(i => i.setTitle('Later').setIcon('inbox').setDisabled(card.slot === 'later').onClick(() => parkTo(card, LATER)));
+      menu.addItem(i => i.setTitle('Next week (any day)').setIcon('calendar-range').setDisabled(dueSooner || (card.slot === 'nextWeek' && !card.date)).onClick(() => parkTo(card, nextDest(board))));
+      if (!card.due) menu.addItem(i => i.setTitle('Later').setIcon('inbox').setDisabled(card.slot === 'later').onClick(() => parkTo(card, LATER)));
     }
     menu.showAtMouseEvent(e);
   }
@@ -418,8 +425,19 @@ function mountBoard(view) {
 
   /* Weekly practices still looking for a day, per Rhythm. */
   function renderTray(top, board) {
-    const card = top.createDiv({ cls: 'fn-tray' });
-    card.createSpan({ cls: 'fn-traylabel', text: 'Practices owed' });
+    const wrap = top.createDiv({ cls: 'fn-traywrap' });
+    wrap.createSpan({ cls: 'fn-traylabel', text: 'Practices owed' });
+    const card = wrap.createDiv({ cls: 'fn-tray' });
+    const more = wrap.createSpan({ cls: 'fn-traymore' });
+    /* How many chips sit past the right edge, kept true as it scrolls. */
+    const countHidden = () => {
+      const edge = card.getBoundingClientRect().right;
+      const hidden = Array.from(card.children).filter(c => c.getBoundingClientRect().left > edge - 24).length;
+      more.setText(hidden ? `+${hidden}` : '');
+      card.toggleClass('has-more', hidden > 0);
+    };
+    card.addEventListener('scroll', countHidden, { passive: true });
+    window.requestAnimationFrame(countHidden);
     for (const t of board.tray) {
       const chip = card.createEl('button', {
         cls: 'fn-chip', attr: { type: 'button', title: `Open ${t.name} in Rhythm` },

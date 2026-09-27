@@ -30,6 +30,10 @@ function cardFor(task, today) {
   if (task.source === 'nudge') return reminderCard(task, today);
   const t = L.parseTask(task.raw);
   if (!t || t.cancelled) return null;
+  /* Parked: a 🛫 ("not before") still to come, no ⏳, and any 📅 already
+     behind it (an overdue deadline pushed to next week). It waits in Next
+     week, not in Slipped, until its week comes. */
+  if (!t.done && !t.scheduled && t.start && t.start > today && (!t.due || t.due < t.start)) return null;
   const date = t.done ? doneDay(t.scheduled || t.due, t.doneDate, today) : (t.scheduled || t.due);
   if (!date) return null;
   return {
@@ -71,10 +75,11 @@ function plannerPathOf(settings) {
 function undatedCard(task, nextWeekStart, settings) {
   if (task.source === 'nudge') return null;
   const t = L.parseTask(task.raw);
-  if (!L.isOpen(t) || t.scheduled || t.due) return null;
+  /* A 📅 only when it is behind the 🛫 (see cardFor): parked past it. */
+  if (!L.isOpen(t) || t.scheduled || (t.due && !(t.start && t.due < t.start))) return null;
   const base = {
     key: `${task.path}:${task.line}`, source: 'tasks', path: task.path, line: task.line, raw: task.raw,
-    text: t.text, scheduled: '', due: '', start: t.start, time: '',
+    text: t.text, scheduled: '', due: t.due, start: t.start, time: '',
     deadlineOnly: false, priority: t.priority, tags: t.tags, done: false, date: '', tagged: false,
   };
   if (t.start) return Object.assign(base, { slot: t.start >= nextWeekStart ? 'nextWeek' : 'later' });

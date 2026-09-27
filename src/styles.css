@@ -87,8 +87,27 @@
   font-variant-numeric: tabular-nums;
 }
 .fortnight .fn-problem { font-size: 12px; color: var(--fn-muted); }
-.fortnight .fn-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-left: auto; }
-.fortnight .fn-traylabel { font-size: 13px; font-weight: 500; color: var(--fn-muted); margin-right: 6px; }
+.fortnight .fn-traywrap { position: relative; display: flex; align-items: center; gap: 12px; flex: 1 1 320px; min-width: 0; margin-left: auto; }
+/* One line that scrolls sideways, so many practices don't push the board
+   down; the edge fades where more chips wait, and "+N" says how many. */
+.fortnight .fn-tray {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 0;
+}
+.fortnight .fn-tray::-webkit-scrollbar { display: none; }
+.fortnight .fn-tray.has-more {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
+}
+.fortnight .fn-tray > button.fn-chip { flex: none; }
+.fortnight .fn-traymore { flex: none; font-size: 13px; font-weight: 500; color: var(--fn-muted); font-variant-numeric: tabular-nums; }
+.fortnight .fn-traylabel { flex: none; white-space: nowrap; font-size: 13px; font-weight: 500; color: var(--fn-muted); margin-right: 6px; }
 .fortnight button.fn-chip {
   display: inline-flex;
   align-items: center;
