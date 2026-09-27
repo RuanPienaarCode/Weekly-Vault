@@ -180,4 +180,104 @@ assert.deepStrictEqual(planBoard({ today: WED, tasks: [], settings: {} }).slippe
   assert.deepStrictEqual(b.slipped.map(c => c.text), ['Timed late', 'Urgent late', 'Plain late', 'Newer timed']);
 }
 
+/* ---- Rhythm: records exactly as Rhythm's own load() shapes them ---- */
+const E = (o = {}) => ({ done: new Set(o.done || []), skip: new Set(), snooze: new Set(), plan: new Set(o.plan || []), note: '' });
+const rhythmFixture = () => ({
+  weekStart: 1,
+  areas: [{ name: 'Body', order: 1 }, { name: 'Craft', order: 2 }],
+  practices: [
+    { name: 'Gym', area: 'Body', cadence: '3/week', path: 'Rhythm/Practices/Gym.md' },
+    { name: 'Paint', area: 'Craft', cadence: 'weekly', path: 'Rhythm/Practices/Paint.md' },
+    { name: 'Read', area: 'Craft', cadence: 'daily', path: 'Rhythm/Practices/Read.md' },
+    { name: 'Journal', area: 'Craft', cadence: 'daily', path: 'Rhythm/Practices/Journal.md' },
+    { name: 'Sabbath walk', area: 'Body', cadence: 'daily', days: ['sat'], path: 'Rhythm/Practices/Sabbath walk.md' },
+  ],
+  events: [
+    { name: 'Dentist', area: 'Body', date: '2026-10-01', time: '14:00', path: 'Rhythm/Events/Dentist.md' },
+    { name: 'Birthday', area: '', date: '2026-10-03', time: '', path: 'Rhythm/Events/Birthday.md' },
+    { name: 'Old event', area: '', date: '2026-09-29', time: '', path: 'Rhythm/Events/Old event.md' },
+  ],
+  log: new Map([['2026-09-28', E({ done: ['Gym'] })], ['2026-10-02', E({ plan: ['Gym'] })]]),
+});
+
+/* 11. Rhythm events sit on their day, locked, before everything else */
+{
+  const b = planBoard({ today: WED, settings: {}, rhythm: rhythmFixture(), tasks: [
+    task('- [ ] Early to-do ⏳ 2026-10-01 ⏫', 'A.md', 1),
+    { source: 'nudge', path: 'Reminders.md', line: 1, text: 'Morning reminder', due: '2026-10-01', scheduled: '', time: '08:00', done: false, priority: 'normal', raw: '' },
+  ] });
+  assert.deepStrictEqual(texts(b, '2026-10-01'), ['Dentist', 'Morning reminder', 'Early to-do']);
+  const ev = day(b, '2026-10-01').cards[0];
+  assert.strictEqual(ev.source, 'event');
+  assert.strictEqual(ev.locked, true);
+  assert.strictEqual(ev.time, '14:00');
+  assert.strictEqual(ev.path, 'Rhythm/Events/Dentist.md');
+  assert.strictEqual(ev.area, 'Body');
+  assert.deepStrictEqual(texts(b, '2026-10-03'), ['Birthday']);
+  /* an event whose day has passed is simply past — it never "slips" */
+  assert.deepStrictEqual(b.slipped.map(c => c.text), []);
+}
+
+/* 12. practices promised to a day (Rhythm's log `plan`) show on that day */
+{
+  const b = planBoard({ today: WED, settings: {}, rhythm: rhythmFixture(), tasks: [] });
+  const fri = day(b, '2026-10-02').cards;
+  assert.deepStrictEqual(fri.map(c => [c.source, c.text]), [['practice', 'Gym']]);
+  assert.strictEqual(fri[0].path, 'Rhythm/Practices/Gym.md');
+}
+
+/* 13. the Practices owed tray: weekly-cadence practices with sessions not
+       yet placed on a day, per Rhythm's own shelf(); plus a daily count */
+{
+  const b = planBoard({ today: WED, settings: {}, rhythm: rhythmFixture(), tasks: [] });
+  /* Gym: 3/week, 1 done Mon, 1 promised to Fri → 1 still to place.
+     Paint: weekly, none done or placed → 1. Equal pressure; Body ranks first. */
+  assert.deepStrictEqual(b.tray.map(t => [t.name, t.need, t.target]), [['Gym', 1, 3], ['Paint', 1, 1]]);
+  assert.deepStrictEqual(b.days.map(d => d.dailyCount), [2, 2, 2, 2, 2, 3, 2]);
+}
+
+/* 13b. on Sunday the tray is for the week ahead: nothing done there yet */
+{
+  const b = planBoard({ today: '2026-10-04', settings: {}, rhythm: rhythmFixture(), tasks: [] });
+  assert.deepStrictEqual(b.tray.map(t => [t.name, t.need]), [['Gym', 3], ['Paint', 1]]);
+}
+
+/* 13c. no Rhythm: no tray, no events, no daily counts */
+{
+  const b = planBoard({ today: WED, settings: {}, tasks: [] });
+  assert.deepStrictEqual(b.tray, []);
+  assert.deepStrictEqual(b.days.map(d => d.dailyCount), [0, 0, 0, 0, 0, 0, 0]);
+}
+
+/* 13d. with Rhythm, the board's week is Rhythm's week: a Sunday-start
+       Rhythm makes Sunday day one, so a practice planned for today counts
+       as placed and the tray doesn't ask for it again */
+{
+  const data = rhythmFixture();
+  data.weekStart = 0;
+  data.practices = [{ name: 'Paint', area: 'Craft', cadence: 'weekly', path: 'Rhythm/Practices/Paint.md' }];
+  data.log = new Map([['2026-10-04', E({ plan: ['Paint'] })]]);
+  const b = planBoard({ today: '2026-10-04', settings: {}, rhythm: data, tasks: [] });
+  assert.strictEqual(b.weekStart, '2026-10-04');
+  assert.deepStrictEqual(b.days[0].cards.map(c => c.text), ['Paint']);
+  assert.deepStrictEqual(b.tray, []);
+}
+
+/* 13e. events in Rhythm's order: time then name, so all-day comes first */
+{
+  const data = rhythmFixture();
+  data.events = [
+    { name: 'Dentist', date: '2026-10-01', time: '14:00', path: 'e/Dentist.md' },
+    { name: '10k race', date: '2026-10-01', time: '', path: 'e/10k.md' },
+  ];
+  assert.deepStrictEqual(texts(planBoard({ today: WED, settings: {}, rhythm: data, tasks: [] }), '2026-10-01'), ['10k race', 'Dentist']);
+}
+
+/* 13f. monthly practices reach the tray too, as on Rhythm's own Plan board */
+{
+  const data = rhythmFixture();
+  data.practices = [{ name: 'Range day', area: 'Body', cadence: 'monthly', path: 'p/Range.md' }];
+  assert.deepStrictEqual(planBoard({ today: WED, settings: {}, rhythm: data, tasks: [] }).tray.map(t => [t.name, t.need]), [['Range day', 1]]);
+}
+
 console.log('plan-board OK');

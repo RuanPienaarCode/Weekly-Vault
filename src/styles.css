@@ -141,6 +141,59 @@
 
 .fortnight button.fn-more:hover { background: var(--background-modifier-hover, rgba(116, 116, 128, .08)); }
 
+/* Practices owed tray */
+.fortnight .fn-tray { padding: 10px 20px 0; }
+.fortnight .fn-tray .fn-gh { justify-content: flex-start; }
+.fortnight .fn-tray-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--fn-surface);
+  border-radius: 11px;
+}
+.fortnight button.fn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin: 0;
+  padding: 0 12px 0 8px;
+  border: 0;
+  border-radius: 100px;
+  background: hsla(var(--color-accent-hsl, 205, 40%, 36%), .12);
+  box-shadow: none;
+  color: var(--fn-accent-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fortnight .fn-chip-n { font-weight: 400; }
+.fortnight .fn-daily {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--fn-muted);
+}
+
+/* Rhythm events: fixed, tinted, time in front */
+.fortnight .fn-list > li.is-event { background: var(--background-primary-alt, rgba(116, 116, 128, .06)); }
+.fortnight .fn-evtime {
+  flex: none;
+  width: 44px;
+  padding-top: 1px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fn-accent-text);
+  font-feature-settings: "tnum" 1;
+}
+.fortnight .fn-lock { color: var(--fn-muted); padding-top: 3px; }
+.fortnight .fn-rhythm { display: inline-flex; align-items: center; gap: 3px; }
+
 .fortnight .fn-card {
   background: var(--fn-surface);
   border-radius: 11px;

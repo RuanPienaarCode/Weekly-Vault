@@ -17,6 +17,14 @@ function makeApp(files = {}, plugins = {}) {
     vault: {
       getMarkdownFiles: () => [...store.keys()].filter(p => p.endsWith('.md')).map(fileOf),
       getFileByPath: p => (store.has(p) ? fileOf(p) : null),
+      /* A folder exists if any note lives under it; children are the notes
+         directly inside (enough for readers that list one folder). */
+      getFolderByPath: p => {
+        const dir = p.replace(/\/+$/, '');
+        const inside = [...store.keys()].filter(k => k.startsWith(dir + '/'));
+        if (!inside.length) return null;
+        return { path: dir, children: inside.filter(k => !k.slice(dir.length + 1).includes('/')).map(fileOf) };
+      },
       cachedRead: async f => { reads.push(f.path); return store.get(f.path); },
       read: async f => store.get(f.path),
       modify: async (f, t) => { store.set(f.path, t); },

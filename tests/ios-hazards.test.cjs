@@ -12,7 +12,10 @@ const root = path.join(__dirname, '..');
 const srcDir = path.join(root, 'src');
 const NODE_REQUIRES = /require\(\s*['"](?:node:)?(fs|path|os|child_process|crypto|http|https|net|electron)['"]\s*\)/;
 
-for (const f of fs.readdirSync(srcDir).filter(f => f.endsWith('.js'))) {
+/* Every .js under src/, including vendored subfolders (src/rhythm/). */
+const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
+  e.isDirectory() ? walk(path.join(dir, e.name)).map(f => path.join(e.name, f)) : [e.name]);
+for (const f of walk(srcDir).filter(f => f.endsWith('.js'))) {
   const text = fs.readFileSync(path.join(srcDir, f), 'utf8');
   assert.ok(!text.includes('(?<'), `${f}: lookbehind/named-group regex literal — iOS 15 fatal`);
   assert.ok(!NODE_REQUIRES.test(text), `${f}: Node API require — mobile fatal`);

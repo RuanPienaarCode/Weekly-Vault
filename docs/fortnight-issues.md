@@ -63,10 +63,11 @@ Ruan's own plugins come first. Nudge and Rhythm cards now appear straight after 
   - Out: moving and ticking (#4, #5); Next week and Later for Nudge (#11).
   - Blocked by: #3
 
-- [ ] **#3c Rhythm events and practices appear on the board**
+- [x] **#3c Rhythm events and practices appear on the board** — done 27 Sep 2026
   - AC:
     - Rhythm Event notes (`date`, `time`) show as locked cards on their day, sorted by time.
-    - The Practices owed tray lists weekly-cadence practices with a count of sessions not yet placed on a day.
+    - The Practices owed tray lists weekly and monthly practices (as Rhythm's own Plan board does) with a count of sessions not yet placed on a day.
+    - The board's week follows Rhythm's week start. Rhythm is read only when the Rhythm plugin is enabled.
     - Each day shows a count of its daily practices.
     - Read-only: nothing is written to Rhythm yet.
   - In: a copy of Rhythm's `model.js`/`dates.js` bundled into the plugin (as in Vista), events and tray UI.

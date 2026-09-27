@@ -36,13 +36,24 @@ const files = q.get('empty') === '1' ? {} : {
     `- [ ] Book the vet ⏳ ${d(-6)}`,
   ].join('\n'),
   'Templates/Daily.md': `- [ ] Template placeholder ⏳ ${d(0)}`,
+  'Rhythm/Areas/Body.md': '---\nrhythm: area\norder: 1\n---\n',
+  'Rhythm/Areas/Craft.md': '---\nrhythm: area\norder: 2\n---\n',
+  'Rhythm/Practices/Gym.md': '---\nrhythm: practice\narea: Body\ncadence: 3/week\n---\n',
+  'Rhythm/Practices/Paint.md': '---\nrhythm: practice\narea: Craft\ncadence: weekly\n---\n',
+  'Rhythm/Practices/Read.md': '---\nrhythm: practice\narea: Craft\ncadence: daily\n---\n',
+  'Rhythm/Practices/Stretch.md': '---\nrhythm: practice\narea: Body\ncadence: daily\n---\n',
+  'Rhythm/Events/Dentist.md': `---\nrhythm: event\narea: Body\ndate: ${d(2)}\ntime: "14:00"\n---\n`,
+  'Rhythm/Events/Team lunch.md': `---\nrhythm: event\ndate: ${d(4)}\n---\n`,
+  [`Rhythm/Log/${d(3)}.md`]: '---\nrhythm: log\nplan: [Gym]\n---\n',
 };
 const reminders = [
   { title: 'Phone the dentist', due: d(1), time: '09:30', done: false, priority: 'normal', line: 2, raw: '', tags: [] },
   { title: 'Renew the licence disc', due: d(3), time: '', done: false, priority: 'high', line: 3, raw: '', tags: [] },
 ];
 const nudgeStore = { isOurs: p => p === 'Reminders.md', path: () => 'Reminders.md', load: async () => ({ items: reminders }) };
-const app = makeApp(files, q.get('nonudge') === '1' ? {} : { 'nudge-reminders': { store: nudgeStore } });
+const plugins = { rhythm: { settings: {} } };
+if (q.get('nonudge') !== '1') plugins['nudge-reminders'] = { store: nudgeStore };
+const app = makeApp(files, plugins);
 app.workspace = { getLeaf: () => ({ openFile: async (f, o) => alert(`Would open ${f.path} at line ${o.eState.line + 1}`) }) };
 
 const plugin = { app, settings: Object.assign({}, DEFAULT_SETTINGS, { excludeFolders: ['Templates'] }) };

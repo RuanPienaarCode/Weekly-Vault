@@ -23,6 +23,9 @@ function addDays(iso, n) {
   return toISO(d);
 }
 
+/* Days from a to b (b - a); rounding absorbs a DST hour. */
+const diffDays = (a, b) => Math.round((fromISO(b) - fromISO(a)) / 86400000);
+
 /* 0 = Sunday … 6 = Saturday. */
 const weekday = iso => fromISO(iso).getDay();
 
@@ -37,4 +40,4 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 const dayNum = iso => String(+iso.slice(8, 10));
 const short = iso => `${dayNum(iso)} ${MON[+iso.slice(5, 7) - 1]}`;
 
-module.exports = { toISO, fromISO, todayISO, addDays, weekday, weekStart, DOW, dayNum, short };
+module.exports = { toISO, fromISO, todayISO, addDays, diffDays, weekday, weekStart, DOW, dayNum, short };

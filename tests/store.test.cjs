@@ -77,5 +77,37 @@ const { makeStore } = require('../src/store');
     assert.deepStrictEqual(store.problems(), []);
   }
 
+  /* 10. Rhythm's notes, read the way Rhythm reads them */
+  {
+    const app = makeApp({
+      'Rhythm/Areas/Body.md': '---\nrhythm: area\norder: 1\n---\nLook after it.',
+      'Rhythm/Practices/Gym.md': '---\nrhythm: practice\narea: Body\ncadence: 3/week\n---\n',
+      'Rhythm/Practices/Old habit.md': '---\nrhythm: practice\narea: Body\ncadence: daily\nstatus: aside\n---\n',
+      'Rhythm/Events/Dentist.md': '---\nrhythm: event\narea: Body\ndate: 2026-10-01\ntime: "14:00"\n---\n',
+      'Rhythm/Log/2026-09-28.md': '---\nrhythm: log\ndone: [Gym]\nplan: []\n---\n',
+      'Rhythm/Log/scratch.md': '---\ndone: [Gym]\n---\n',
+    }, { rhythm: { settings: {} } });
+    const r = await makeStore({ app, settings: {} }).loadRhythm();
+    assert.strictEqual(r.weekStart, 1);
+    assert.deepStrictEqual(r.areas.map(a => [a.name, a.order]), [['Body', 1]]);
+    assert.deepStrictEqual(r.practices.map(p => [p.name, p.area, p.cadence, p.path]), [['Gym', 'Body', '3/week', 'Rhythm/Practices/Gym.md']]);
+    assert.deepStrictEqual(r.events.map(e => [e.name, e.date, e.time, e.path]), [['Dentist', '2026-10-01', '14:00', 'Rhythm/Events/Dentist.md']]);
+    assert.deepStrictEqual([...r.log.keys()], ['2026-09-28']);
+    assert.deepStrictEqual([...r.log.get('2026-09-28').done], ['Gym']);
+  }
+
+  /* 10b. no Rhythm folder, or Rhythm not enabled: nothing to show */
+  assert.strictEqual(await makeStore({ app: makeApp({ 'Home.md': 'x' }, { rhythm: { settings: {} } }), settings: {} }).loadRhythm(), null);
+  assert.strictEqual(await makeStore({ app: makeApp({ 'Rhythm/Practices/Gym.md': '---\ncadence: 3/week\n---\n' }), settings: {} }).loadRhythm(), null);
+
+  /* 10c. Rhythm's own settings win: its folder and its week start */
+  {
+    const app = makeApp({ 'Life/Practices/Gym.md': '---\ncadence: 3/week\n---\n' },
+      { rhythm: { settings: { folder: '/Life//', weekStart: 0 } } });
+    const r = await makeStore({ app, settings: {} }).loadRhythm();
+    assert.deepStrictEqual(r.practices.map(p => p.name), ['Gym']);
+    assert.strictEqual(r.weekStart, 0);
+  }
+
   console.log('store OK');
 })().catch(e => { console.error(e); process.exit(1); });

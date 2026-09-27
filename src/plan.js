@@ -5,6 +5,8 @@
 
 const D = require('./dates');
 const L = require('./tasks-line');
+/* Rhythm's own model, bundled unchanged (src/rhythm/VENDORED.md). */
+const RM = require('./rhythm/model');
 
 /* The week showing: the one today is in — except on its last day (Sunday,
    for a Monday week), when you sit down to plan the week ahead, so the board
@@ -53,9 +55,31 @@ function inFolders(path, folders) {
   });
 }
 
-/* Within a day: anything at a set time first, earliest first; then by
-   priority, then where the line lives. */
+/* Rhythm events are fixed: locked cards, shown before anything movable. */
+function eventCard(e) {
+  return {
+    key: `event:${e.path}`, source: 'event', path: e.path, line: 0, locked: true,
+    text: e.name, area: e.area || '', scheduled: '', due: '', time: e.time || '',
+    deadlineOnly: false, priority: 'normal', tags: [], date: e.date,
+  };
+}
+
+/* A practice promised to a day in Rhythm's log (`plan`). */
+function practiceCard(p, date) {
+  return {
+    key: `practice:${date}:${p.name}`, source: 'practice', path: p.path, line: 0,
+    text: p.name, area: p.area || '', scheduled: '', due: '', time: p.time || '',
+    deadlineOnly: false, priority: 'normal', tags: [], date,
+  };
+}
+
+/* Within a day: events first, in Rhythm's own order (time then name, so an
+   all-day event leads); then anything at a set time, earliest first; then
+   by priority, then where the line lives. */
 function byTimeThenPriority(a, b) {
+  const ea = a.source === 'event', eb = b.source === 'event';
+  if (ea !== eb) return ea ? -1 : 1;
+  if (ea) return (a.time + a.text).localeCompare(b.time + b.text);
   if (a.time || b.time) {
     if (!a.time) return 1;
     if (!b.time) return -1;
@@ -66,15 +90,20 @@ function byTimeThenPriority(a, b) {
     || a.line - b.line;
 }
 
-function planBoard({ today, tasks = [], settings = {} }) {
-  const start = boardWeek(today, settings.weekStart == null ? 1 : settings.weekStart);
+function planBoard({ today, tasks = [], settings = {}, rhythm = null }) {
+  /* With Rhythm, its week is the week: otherwise a practice planned for
+     Rhythm's first day could land outside the board's week and be counted
+     as owed as well as placed. */
+  const weekStart = rhythm && rhythm.weekStart != null ? rhythm.weekStart
+    : settings.weekStart == null ? 1 : settings.weekStart;
+  const start = boardWeek(today, weekStart);
   const days = [];
   /* Jumped ahead (it's the week's last day): keep today in front, so what
      is planned for today stays in sight while you plan the week ahead. */
-  if (start > today) days.push({ date: today, past: false, isToday: true, cards: [] });
+  if (start > today) days.push({ date: today, past: false, isToday: true, cards: [], dailyCount: 0 });
   for (let i = 0; i < 7; i++) {
     const date = D.addDays(start, i);
-    days.push({ date, past: date < today, isToday: date === today, cards: [] });
+    days.push({ date, past: date < today, isToday: date === today, cards: [], dailyCount: 0 });
   }
   const byDate = new Map(days.map(d => [d.date, d]));
   /* Still open and its day has gone: Slipped, shown at the top of Today so
@@ -89,9 +118,33 @@ function planBoard({ today, tasks = [], settings = {} }) {
     const d = byDate.get(card.date);
     if (d) d.cards.push(card);
   }
+  const tray = rhythm ? placeRhythm(rhythm, days, today, start, byDate) : [];
   for (const d of days) d.cards.sort(byTimeThenPriority);
   slipped.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : byTimeThenPriority(a, b)));
-  return { weekStart: start, today, days, slipped };
+  return { weekStart: start, today, days, slipped, tray };
+}
+
+/* Rhythm on the board, all by Rhythm's own rules: events on their day,
+   practices promised to a day on that day, a count of daily practices, and
+   the tray — weekly and monthly practices with sessions still to place (its
+   shelf(), as on Rhythm's own Plan board). The tray looks from the first day still ahead to the end of the
+   week showing: on Sunday that is the whole week ahead. */
+function placeRhythm(data, days, today, start, byDate) {
+  const weekStart = data.weekStart == null ? 1 : data.weekStart;
+  for (const e of data.events || []) {
+    const d = byDate.get(e.date);
+    if (d) d.cards.push(eventCard(e));
+  }
+  const per = RM.boardDays(data, days[0].date, days.length, { weekStart, events: [] });
+  per.forEach((b, i) => {
+    days[i].dailyCount = b.dailyCount;
+    for (const { p } of b.planned) days[i].cards.push(practiceCard(p, b.date));
+  });
+  const from = start > today ? start : today;
+  const left = D.diffDays(from, D.addDays(start, 6)) + 1;
+  return RM.shelf(data, from, left, { weekStart }).map(s => ({
+    name: s.p.name, area: s.p.area || '', path: s.p.path, need: s.need, target: s.pr.target,
+  }));
 }
 
 module.exports = { planBoard };
