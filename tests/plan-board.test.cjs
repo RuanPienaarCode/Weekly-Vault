@@ -42,6 +42,7 @@ const WED = '2026-09-30';
   assert.strictEqual(c.key, 'Notes/Home.md:4');
   assert.strictEqual(c.path, 'Notes/Home.md');
   assert.strictEqual(c.line, 4);
+  assert.strictEqual(c.raw, '- [ ] Call plumber ⏳ 2026-10-01');
   assert.strictEqual(c.scheduled, '2026-10-01');
   assert.strictEqual(c.deadlineOnly, false);
   assert.deepStrictEqual(b.days.filter(d => d.date !== '2026-10-01').map(d => d.cards.length), [0, 0, 0, 0, 0, 0]);

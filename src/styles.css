@@ -246,6 +246,11 @@
 .fortnight .fn-lock { color: var(--fn-muted); padding-top: 3px; }
 .fortnight .fn-rhythm { display: inline-flex; align-items: center; gap: 3px; }
 
+/* Drag and drop */
+.fortnight [draggable="true"] { cursor: grab; }
+.fortnight .is-dragging { opacity: .45; }
+.fortnight .fn-col.is-drop .fn-card { box-shadow: 0 0 0 2px var(--fn-accent); }
+
 .fortnight .fn-card {
   background: var(--fn-surface);
   border-radius: 11px;

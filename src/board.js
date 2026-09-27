@@ -1,8 +1,8 @@
 'use strict';
-/* The board (desktop, read-only for now): this week's days as columns in
-   the Grouped look. Rendering only — what goes where is planBoard's call. */
+/* The board (desktop): this week's days as columns in the Grouped look.
+   What goes where is planBoard's call; moving a card is the store's. */
 
-const { setIcon } = require('obsidian');
+const { setIcon, Menu, Notice } = require('obsidian');
 const { planBoard } = require('./plan');
 const { introScreens, shouldShowIntro } = require('./intro');
 const D = require('./dates');
@@ -26,11 +26,76 @@ function mountBoard(view) {
   let lastTasks = [];
   let lastRhythm = null;
   const SLIPPED_PREVIEW = 5;
+  /* Cards on screen by key, for drag and drop and the Move menu. */
+  let byKey = new Map();
+  const DRAG_TYPE = 'text/x-fortnight-card';
+
+  /* Move a card and redraw. A refusal (the note changed underneath, or the
+     card is fixed) is said plainly and the board reloads from the vault. */
+  async function moveTo(card, date) {
+    let r;
+    try { r = await plugin.store.move(card, date); }
+    catch (e) { console.error('Fortnight: move failed', e); r = { ok: false, reason: 'error' }; }
+    if (!r.ok) {
+      console.warn('Fortnight: move refused', r.reason, card);
+      const why = r.reason === 'changed' ? 'it changed in its note — the board has been refreshed'
+        : r.reason === 'locked' ? 'events are fixed' : 'something went wrong (see the console)';
+      new Notice(`Fortnight: couldn't move "${card.text}": ${why}.`);
+    }
+    await refresh();
+  }
+
+  /* The days a card can still go to: today and the days ahead on the board. */
+  const openDays = board => board.days.filter(d => !d.past);
+
+  function moveMenu(e, card, board) {
+    const menu = new Menu();
+    for (const d of openDays(board)) {
+      menu.addItem(i => i
+        .setTitle(d.isToday ? `Today (${DOW[D.weekday(d.date)]})` : `${DOW[D.weekday(d.date)]} ${short(d.date)}`)
+        .setIcon('calendar')
+        .setDisabled(d.date === card.date && !card.fromTray)
+        .onClick(() => moveTo(card, d.date)));
+    }
+    menu.showAtMouseEvent(e);
+  }
+
+  function makeDraggable(el, card, board) {
+    if (card.source === 'event') return;
+    el.setAttribute('draggable', 'true');
+    el.addEventListener('dragstart', e => {
+      e.dataTransfer.setData(DRAG_TYPE, card.key);
+      e.dataTransfer.effectAllowed = 'move';
+      el.addClass('is-dragging');
+    });
+    el.addEventListener('dragend', () => el.removeClass('is-dragging'));
+    el.addEventListener('contextmenu', e => { e.preventDefault(); moveMenu(e, card, board); });
+  }
+
+  function makeDropTarget(el, date) {
+    el.addEventListener('dragover', e => {
+      if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      el.addClass('is-drop');
+    });
+    el.addEventListener('dragleave', e => { if (!el.contains(e.relatedTarget)) el.removeClass('is-drop'); });
+    el.addEventListener('drop', e => {
+      el.removeClass('is-drop');
+      const card = byKey.get(e.dataTransfer.getData(DRAG_TYPE));
+      if (!card) return;
+      e.preventDefault();
+      if (card.date === date && !card.fromTray) return;
+      moveTo(card, date);
+    });
+  }
 
   function renderCard(list, card, board, slipped) {
     const li = list.createEl('li', { cls: [`is-${card.source}`, slipped ? 'is-slipped' : ''] });
     const row = li.createEl('button', { cls: 'fn-row', attr: { type: 'button', title: `Open in ${card.path}` } });
     row.addEventListener('click', () => plugin.openTask(card));
+    byKey.set(card.key, card);
+    makeDraggable(row, card, board);
     if (card.source === 'event') {
       /* A fixed appointment: time in front, a lock — it can't be dragged. */
       row.createSpan({ cls: 'fn-evtime', text: card.time || 'All day' });
@@ -84,6 +149,7 @@ function mountBoard(view) {
     }
     if (day.isToday && board.slipped.length) renderSlipped(col, board);
     const card = col.createDiv({ cls: 'fn-card' });
+    makeDropTarget(col, day.date);
     if (!day.cards.length) {
       card.createDiv({ cls: 'fn-empty-day', text: 'Nothing planned' });
       return;
@@ -130,6 +196,10 @@ function mountBoard(view) {
       chip.createSpan({ text: t.name });
       chip.createSpan({ cls: 'fn-chip-n', text: t.target > 1 ? `${t.need} of ${t.target} left` : 'to place' });
       chip.addEventListener('click', () => plugin.openTask({ path: t.path, line: 0 }));
+      /* Drag a practice onto a day to promise it there, in Rhythm's log. */
+      const pc = { key: `tray:${t.name}`, source: 'practice', fromTray: true, text: t.name, path: t.path };
+      byKey.set(pc.key, pc);
+      makeDraggable(chip, pc, board);
     }
   }
 
@@ -138,6 +208,7 @@ function mountBoard(view) {
     lastRhythm = rhythm;
     const board = planBoard({ today: D.todayISO(), tasks, rhythm, settings: plugin.settings });
     lastBoard = board;
+    byKey = new Map();
     if (intro) intro.update(board);
     /* A redraw keeps the reader where they were on a wide board. */
     const prev = main.querySelector('.fn-board');

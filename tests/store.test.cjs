@@ -38,7 +38,7 @@ const { makeStore } = require('../src/store');
       isOurs: p => p === 'Reminders.md',
       path: () => 'Reminders.md',
       load: async () => ({ items: [
-        { title: 'Phone the dentist', due: '2026-10-01', time: '09:30', done: false, priority: 'high', line: 4, raw: '- [ ] Phone the dentist 📅 2026-10-01 ⏰ 09:30 ⏫', tags: ['#health'] },
+        { title: 'Phone the dentist', due: '2026-10-01', time: '09:30', done: false, priority: 'high', line: 4, raw: '- [ ] Phone the dentist 📅 2026-10-01 ⏰ 09:30 ⏫', tags: ['#health'], group: 'Family' },
         { title: 'Old thing', due: '2026-09-01', time: '', done: true, priority: 'normal', line: 6, raw: '- [x] Old thing 📅 2026-09-01', tags: [] },
         { title: 'Planned only', due: '', scheduled: '2026-10-02', time: '', done: false, priority: 'normal', line: 7, raw: '- [ ] Planned only ⏳ 2026-10-02', tags: [] },
       ] }),
@@ -49,11 +49,11 @@ const { makeStore } = require('../src/store');
     const nudged = tasks.filter(t => t.source === 'nudge');
     assert.deepStrictEqual(nudged, [
       { source: 'nudge', path: 'Reminders.md', line: 4, raw: '- [ ] Phone the dentist 📅 2026-10-01 ⏰ 09:30 ⏫',
-        text: 'Phone the dentist', due: '2026-10-01', scheduled: '', time: '09:30', done: false, priority: 'high', tags: ['#health'] },
+        text: 'Phone the dentist', due: '2026-10-01', scheduled: '', time: '09:30', done: false, priority: 'high', tags: ['#health'], group: 'Family' },
       { source: 'nudge', path: 'Reminders.md', line: 6, raw: '- [x] Old thing 📅 2026-09-01',
-        text: 'Old thing', due: '2026-09-01', scheduled: '', time: '', done: true, priority: 'normal', tags: [] },
+        text: 'Old thing', due: '2026-09-01', scheduled: '', time: '', done: true, priority: 'normal', tags: [], group: '' },
       { source: 'nudge', path: 'Reminders.md', line: 7, raw: '- [ ] Planned only ⏳ 2026-10-02',
-        text: 'Planned only', due: '', scheduled: '2026-10-02', time: '', done: false, priority: 'normal', tags: [] },
+        text: 'Planned only', due: '', scheduled: '2026-10-02', time: '', done: false, priority: 'normal', tags: [], group: '' },
     ]);
     assert.deepStrictEqual(tasks.filter(t => t.source !== 'nudge').map(t => t.path), ['Home.md']);
     assert.deepStrictEqual(app.reads, ['Home.md']);

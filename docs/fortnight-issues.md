@@ -83,7 +83,7 @@ Ruan's own plugins come first. Nudge and Rhythm cards now appear straight after 
   - Out: the guided Sunday steps (#16), which this screen will lead into.
   - Blocked by: #3c
 
-- [ ] **#4 Drag a to-do to another day**
+- [x] **#4 Drag a to-do to another day** — done 27 Sep 2026; also a right-click Move menu; every write is one atomic vault.process
   - AC:
     - Dropping a card on a day sets ⏳ to that date. 📅 is untouched.
     - If the line changed on disk since loading, the move is refused and the board reloads.

@@ -11,6 +11,7 @@ function makeApp(files = {}, plugins = {}) {
   const store = new Map(Object.entries(files));
   const fileOf = path => ({ path, name: path.split('/').pop(), basename: path.split('/').pop().replace(/\.md$/, ''), extension: 'md' });
   const reads = [];
+  const folders = new Set();
   return {
     reads,
     files: store,
@@ -22,12 +23,16 @@ function makeApp(files = {}, plugins = {}) {
       getFolderByPath: p => {
         const dir = p.replace(/\/+$/, '');
         const inside = [...store.keys()].filter(k => k.startsWith(dir + '/'));
-        if (!inside.length) return null;
+        if (!inside.length && !folders.has(dir)) return null;
         return { path: dir, children: inside.filter(k => !k.slice(dir.length + 1).includes('/')).map(fileOf) };
       },
       cachedRead: async f => { reads.push(f.path); return store.get(f.path); },
       read: async f => store.get(f.path),
       modify: async (f, t) => { store.set(f.path, t); },
+      /* Atomic read-modify-write, as Obsidian's vault.process. */
+      process: async (f, fn) => { const t = fn(store.get(f.path)); store.set(f.path, t); return t; },
+      create: async (p, t) => { store.set(p, t); return fileOf(p); },
+      createFolder: async p => { folders.add(p); },
       on: () => ({}),
     },
     metadataCache: {

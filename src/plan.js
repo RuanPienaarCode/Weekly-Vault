@@ -25,7 +25,7 @@ function cardFor(task) {
   const date = t.scheduled || t.due;
   if (!date) return null;
   return {
-    key: `${task.path}:${task.line}`, source: 'tasks', path: task.path, line: task.line,
+    key: `${task.path}:${task.line}`, source: 'tasks', path: task.path, line: task.line, raw: task.raw,
     text: t.text, scheduled: t.scheduled, due: t.due, time: '',
     deadlineOnly: !t.scheduled, priority: t.priority, tags: t.tags,
     date,
@@ -39,9 +39,9 @@ function reminderCard(r) {
   const date = r.due || r.scheduled;
   if (r.done || !date) return null;
   return {
-    key: `${r.path}:${r.line}`, source: 'nudge', path: r.path, line: r.line,
+    key: `${r.path}:${r.line}`, source: 'nudge', path: r.path, line: r.line, raw: r.raw,
     text: r.text, scheduled: r.scheduled || '', due: r.due, time: r.time || '',
-    deadlineOnly: false, priority: r.priority || 'normal', tags: r.tags || [],
+    deadlineOnly: false, priority: r.priority || 'normal', tags: r.tags || [], group: r.group || '',
     date,
   };
 }

@@ -27,7 +27,29 @@ export class ItemView {
 export class PluginSettingTab {}
 export class Setting {}
 export class Modal {}
-export class Menu {}
+/* Enough of Obsidian's Menu to show and click a context menu. */
+export class Menu {
+  constructor() { this.items = []; }
+  addItem(fn) {
+    const it = { title: '', disabled: false, cb: null };
+    const api = { setTitle: t => { it.title = t; return api; }, setIcon: () => api, setDisabled: d => { it.disabled = d; return api; }, onClick: cb => { it.cb = cb; return api; } };
+    fn(api); this.items.push(it); return this;
+  }
+  showAtMouseEvent(e) {
+    document.querySelectorAll('.stub-menu').forEach(m => m.remove());
+    const m = document.createElement('div');
+    m.className = 'stub-menu';
+    m.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;z-index:60;background:#fff;color:#000;border:1px solid #ccc;border-radius:8px;padding:4px;display:flex;flex-direction:column;font:13px system-ui`;
+    for (const it of this.items) {
+      const b = document.createElement('button');
+      b.textContent = it.title; b.disabled = it.disabled;
+      b.style.cssText = 'text-align:left;background:none;border:0;padding:6px 10px;cursor:pointer';
+      b.onclick = () => { m.remove(); it.cb && it.cb(); };
+      m.appendChild(b);
+    }
+    document.body.appendChild(m);
+  }
+}
 export class Notice { constructor(msg) { console.log('[notice]', msg); } }
 export function setIcon() {}
 export const Platform = { isMobile: new URLSearchParams(location.search).get('mobile') === '1' };

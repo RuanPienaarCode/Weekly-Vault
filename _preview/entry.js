@@ -50,7 +50,11 @@ const reminders = [
   { title: 'Phone the dentist', due: d(1), time: '09:30', done: false, priority: 'normal', line: 2, raw: '', tags: [] },
   { title: 'Renew the licence disc', due: d(3), time: '', done: false, priority: 'high', line: 3, raw: '', tags: [] },
 ];
-const nudgeStore = { isOurs: p => p === 'Reminders.md', path: () => 'Reminders.md', load: async () => ({ items: reminders }) };
+const nudgeStore = {
+  isOurs: p => p === 'Reminders.md', path: () => 'Reminders.md',
+  load: async () => ({ items: reminders }),
+  setDue: async (item, due) => { const r = reminders.find(x => x.line === item.line); if (r) r.due = due; return { ok: !!r }; },
+};
 const plugins = { rhythm: { settings: {} } };
 if (q.get('nonudge') !== '1') plugins['nudge-reminders'] = { store: nudgeStore };
 const app = makeApp(files, plugins);
