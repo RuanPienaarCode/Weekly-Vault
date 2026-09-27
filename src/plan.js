@@ -18,31 +18,39 @@ function boardWeek(today, weekStart) {
 
 /* A card's day: its ⏳ scheduled date; failing that, its 📅 due date, shown
    as a deadline so it can't hide. */
-function cardFor(task) {
-  if (task.source === 'nudge') return reminderCard(task);
+/* A done card shows on the day it was planned for (⏳, else 📅) — unless
+   that day has gone, when it shows on the day it was done: a slipped card
+   ticked today lands in today's Done, not on a collapsed past day. */
+function doneDay(planned, doneDate, today) {
+  if (planned && planned >= today) return planned;
+  return doneDate || planned;
+}
+
+function cardFor(task, today) {
+  if (task.source === 'nudge') return reminderCard(task, today);
   const t = L.parseTask(task.raw);
-  if (!L.isOpen(t)) return null;
-  const date = t.scheduled || t.due;
+  if (!t || t.cancelled) return null;
+  const date = t.done ? doneDay(t.scheduled || t.due, t.doneDate, today) : (t.scheduled || t.due);
   if (!date) return null;
   return {
     key: `${task.path}:${task.line}`, source: 'tasks', path: task.path, line: task.line, raw: task.raw,
     text: t.text, scheduled: t.scheduled, due: t.due, time: '',
     deadlineOnly: !t.scheduled, priority: t.priority, tags: t.tags,
-    date,
+    done: t.done, date,
   };
 }
 
 /* A Nudge reminder arrives already read by Nudge (its ⏰ time is Nudge's
    own token, which a Tasks-style reader can't see past). Its due day IS
    its day — a reminder, not a deadline badge; one with only ⏳ sits there. */
-function reminderCard(r) {
-  const date = r.due || r.scheduled;
-  if (r.done || !date) return null;
+function reminderCard(r, today) {
+  const date = r.done ? doneDay(r.due || r.scheduled, r.doneDate, today) : (r.due || r.scheduled);
+  if (!date) return null;
   return {
     key: `${r.path}:${r.line}`, source: 'nudge', path: r.path, line: r.line, raw: r.raw,
     text: r.text, scheduled: r.scheduled || '', due: r.due, time: r.time || '',
     deadlineOnly: false, priority: r.priority || 'normal', tags: r.tags || [], group: r.group || '',
-    date,
+    done: !!r.done, date,
   };
 }
 
@@ -100,10 +108,10 @@ function planBoard({ today, tasks = [], settings = {}, rhythm = null }) {
   const days = [];
   /* Jumped ahead (it's the week's last day): keep today in front, so what
      is planned for today stays in sight while you plan the week ahead. */
-  if (start > today) days.push({ date: today, past: false, isToday: true, cards: [], dailyCount: 0 });
+  if (start > today) days.push({ date: today, past: false, isToday: true, cards: [], done: [], dailyCount: 0 });
   for (let i = 0; i < 7; i++) {
     const date = D.addDays(start, i);
-    days.push({ date, past: date < today, isToday: date === today, cards: [], dailyCount: 0 });
+    days.push({ date, past: date < today, isToday: date === today, cards: [], done: [], dailyCount: 0 });
   }
   const byDate = new Map(days.map(d => [d.date, d]));
   /* Still open and its day has gone: Slipped, shown at the top of Today so
@@ -112,14 +120,15 @@ function planBoard({ today, tasks = [], settings = {}, rhythm = null }) {
   const slipped = [];
   for (const task of tasks) {
     if (inFolders(task.path, settings.excludeFolders)) continue;
-    const card = cardFor(task);
+    const card = cardFor(task, today);
     if (!card) continue;
+    if (card.done) { const d = byDate.get(card.date); if (d) d.done.push(card); continue; }
     if (card.date < today) { slipped.push(card); continue; }
     const d = byDate.get(card.date);
     if (d) d.cards.push(card);
   }
   const tray = rhythm ? placeRhythm(rhythm, days, today, start, byDate) : [];
-  for (const d of days) d.cards.sort(byTimeThenPriority);
+  for (const d of days) { d.cards.sort(byTimeThenPriority); d.done.sort(byTimeThenPriority); }
   slipped.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : byTimeThenPriority(a, b)));
   return { weekStart: start, today, days, slipped, tray };
 }
@@ -139,6 +148,11 @@ function placeRhythm(data, days, today, start, byDate) {
   per.forEach((b, i) => {
     days[i].dailyCount = b.dailyCount;
     for (const { p } of b.planned) days[i].cards.push(practiceCard(p, b.date));
+    /* Flexible practices ticked that day join its done list; daily ones
+       are only a count. */
+    for (const p of (data.practices || []).filter(RM.isFlexible)) {
+      if (RM.logHas(data.log, b.date, p.name)) days[i].done.push(Object.assign(practiceCard(p, b.date), { done: true }));
+    }
   });
   const from = start > today ? start : today;
   const left = D.diffDays(from, D.addDays(start, 6)) + 1;

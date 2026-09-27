@@ -49,11 +49,11 @@ const { makeStore } = require('../src/store');
     const nudged = tasks.filter(t => t.source === 'nudge');
     assert.deepStrictEqual(nudged, [
       { source: 'nudge', path: 'Reminders.md', line: 4, raw: '- [ ] Phone the dentist 📅 2026-10-01 ⏰ 09:30 ⏫',
-        text: 'Phone the dentist', due: '2026-10-01', scheduled: '', time: '09:30', done: false, priority: 'high', tags: ['#health'], group: 'Family' },
+        text: 'Phone the dentist', due: '2026-10-01', scheduled: '', doneDate: '', time: '09:30', done: false, priority: 'high', tags: ['#health'], group: 'Family' },
       { source: 'nudge', path: 'Reminders.md', line: 6, raw: '- [x] Old thing 📅 2026-09-01',
-        text: 'Old thing', due: '2026-09-01', scheduled: '', time: '', done: true, priority: 'normal', tags: [], group: '' },
+        text: 'Old thing', due: '2026-09-01', scheduled: '', doneDate: '', time: '', done: true, priority: 'normal', tags: [], group: '' },
       { source: 'nudge', path: 'Reminders.md', line: 7, raw: '- [ ] Planned only ⏳ 2026-10-02',
-        text: 'Planned only', due: '', scheduled: '2026-10-02', time: '', done: false, priority: 'normal', tags: [], group: '' },
+        text: 'Planned only', due: '', scheduled: '2026-10-02', doneDate: '', time: '', done: false, priority: 'normal', tags: [], group: '' },
     ]);
     assert.deepStrictEqual(tasks.filter(t => t.source !== 'nudge').map(t => t.path), ['Home.md']);
     assert.deepStrictEqual(app.reads, ['Home.md']);

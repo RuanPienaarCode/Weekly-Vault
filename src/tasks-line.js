@@ -125,8 +125,9 @@ function setField(raw, name, value) {
   return s.slice(0, at) + before + WRITE_MARK[name] + ' ' + value + after + s.slice(at);
 }
 
-/* Change only the character inside the box. Drop writes '-' (cancelled);
-   ticking done goes through Tasks itself, never through here. */
+/* Change only the character inside the box. Drop writes '-' (cancelled).
+   Ticking done goes through Tasks itself; this writes a plain 'x' only when
+   Tasks isn't installed. */
 function setStatus(raw, ch) {
   if (typeof ch !== 'string' || ch.length !== 1 || ch === ']' || ch === '[' || ch === '\n') {
     throw new Error(`tasks-line: bad status "${ch}"`);

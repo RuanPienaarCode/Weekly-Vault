@@ -281,4 +281,30 @@ const rhythmFixture = () => ({
   assert.deepStrictEqual(planBoard({ today: WED, settings: {}, rhythm: data, tasks: [] }).tray.map(t => [t.name, t.need]), [['Range day', 1]]);
 }
 
+/* 14. done cards stay on their day, in a separate `done` list: a Tasks line
+       by its ⏳ (else 📅, else ✅ day), a Nudge reminder by its due day, a
+       flexible practice ticked in Rhythm's log on that day */
+{
+  const data = rhythmFixture();
+  data.log = new Map([['2026-10-01', E({ done: ['Gym', 'Read'] })]]);
+  const b = planBoard({ today: WED, settings: {}, rhythm: data, tasks: [
+    task('- [x] Called plumber ⏳ 2026-10-01 ✅ 2026-10-01', 'A.md', 1),
+    task('- [x] Filed early 📅 2026-10-02 ✅ 2026-09-30', 'A.md', 2),
+    task('- [x] Just done ✅ 2026-09-30', 'A.md', 3),
+    task('- [-] Dropped ⏳ 2026-10-01', 'A.md', 4),
+    task('- [x] Done last week ⏳ 2026-09-21 ✅ 2026-09-21', 'A.md', 5),
+    task('- [x] Slipped, then done today ⏳ 2026-09-21 ✅ 2026-09-30', 'A.md', 6),
+    { source: 'nudge', path: 'Reminders.md', line: 1, text: 'Paid rates', due: '2026-10-01', scheduled: '', time: '', done: true, priority: 'normal', raw: '- [x] Paid rates 📅 2026-10-01' },
+  ] });
+  assert.deepStrictEqual(day(b, '2026-10-01').done.map(c => [c.source, c.text]), [['tasks', 'Called plumber'], ['nudge', 'Paid rates'], ['practice', 'Gym']]);
+  assert.deepStrictEqual(day(b, '2026-10-02').done.map(c => c.text), ['Filed early']);
+  /* a slipped card ticked today shows in today's Done, not on its old day */
+  assert.deepStrictEqual(day(b, WED).done.map(c => c.text), ['Just done', 'Slipped, then done today']);
+  /* only the fixed Dentist event is still open that day */
+  assert.deepStrictEqual(texts(b, '2026-10-01'), ['Dentist']);
+  assert.strictEqual(day(b, '2026-10-01').done[0].done, true);
+  /* done is never slipped */
+  assert.deepStrictEqual(b.slipped, []);
+}
+
 console.log('plan-board OK');

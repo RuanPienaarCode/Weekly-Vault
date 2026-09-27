@@ -111,5 +111,114 @@ const rhythm = { rhythm: { settings: {} } };
     assert.deepStrictEqual(r, { ok: false, reason: 'changed' });
   }
 
+  /* 12. ticking a to-do goes through Tasks itself, so a repeating one gets
+         its next occurrence exactly as Tasks would write it */
+  {
+    const calls = [];
+    const tasksPlugin = { apiV1: { executeToggleTaskDoneCommand: (line, path) => {
+      calls.push([line, path]);
+      return '- [ ] Water plants 🔁 every week ⏳ 2026-10-08\n- [x] Water plants 🔁 every week ⏳ 2026-10-01 ✅ 2026-09-30';
+    } } };
+    const app = makeApp({ 'Home.md': '# Home\n- [ ] Water plants 🔁 every week ⏳ 2026-10-01\nafter' }, { 'obsidian-tasks-plugin': tasksPlugin });
+    const r = await makeStore({ app, settings: {} }).tick({ source: 'tasks', path: 'Home.md', line: 1, raw: '- [ ] Water plants 🔁 every week ⏳ 2026-10-01' }, '2026-09-30');
+    assert.deepStrictEqual(r, { ok: true });
+    assert.deepStrictEqual(calls, [['- [ ] Water plants 🔁 every week ⏳ 2026-10-01', 'Home.md']]);
+    assert.strictEqual(app.files.get('Home.md'), '# Home\n- [ ] Water plants 🔁 every week ⏳ 2026-10-08\n- [x] Water plants 🔁 every week ⏳ 2026-10-01 ✅ 2026-09-30\nafter');
+  }
+
+  /* 12b. without Tasks: a plain tick, nothing else */
+  {
+    const app = makeApp({ 'Home.md': '- [ ] Call plumber ⏳ 2026-10-01' });
+    await makeStore({ app, settings: {} }).tick({ source: 'tasks', path: 'Home.md', line: 0, raw: '- [ ] Call plumber ⏳ 2026-10-01' }, '2026-09-30');
+    assert.strictEqual(app.files.get('Home.md'), '- [x] Call plumber ⏳ 2026-10-01');
+  }
+
+  /* 12c. a changed line is refused, as for moves */
+  {
+    const app = makeApp({ 'Home.md': '- [ ] Call plumber now ⏳ 2026-10-01' });
+    const r = await makeStore({ app, settings: {} }).tick({ source: 'tasks', path: 'Home.md', line: 0, raw: '- [ ] Call plumber ⏳ 2026-10-01' }, '2026-09-30');
+    assert.deepStrictEqual(r, { ok: false, reason: 'changed' });
+    assert.strictEqual(app.files.get('Home.md'), '- [ ] Call plumber now ⏳ 2026-10-01');
+  }
+
+  /* 12d. a reminder ticks through Nudge's toggle, naming its list */
+  {
+    const calls = [];
+    const nudge = { isOurs: () => true, path: () => 'Reminders.md', load: async () => ({ items: [] }),
+      toggle: async (item, today) => { calls.push([item.raw, item.line, item.group, today]); return { ok: true }; } };
+    const r = await makeStore({ app: makeApp({}, { 'nudge-reminders': { store: nudge } }), settings: {} })
+      .tick({ source: 'nudge', path: 'Reminders.md', line: 3, raw: '- [ ] Pay rates 📅 2026-10-01', group: 'Home' }, '2026-09-30');
+    assert.deepStrictEqual(r, { ok: true });
+    assert.deepStrictEqual(calls, [['- [ ] Pay rates 📅 2026-10-01', 3, 'Home', '2026-09-30']]);
+  }
+
+  /* 12e. a practice ticked is done TODAY in Rhythm's log (as Rhythm's tick);
+          if it was promised to another day, that promise is released */
+  {
+    const app = makeApp({
+      'Rhythm/Log/2026-09-30.md': '---\nrhythm: log\nskip: [Gym]\n---\n',
+      'Rhythm/Log/2026-10-02.md': '---\nrhythm: log\ndone: []\nplan: [Gym]\n---\n',
+    }, rhythm);
+    const r = await makeStore({ app, settings: {} }).tick({ source: 'practice', text: 'Gym', path: 'p', date: '2026-10-02' }, '2026-09-30');
+    assert.deepStrictEqual(r, { ok: true });
+    assert.strictEqual(app.files.get('Rhythm/Log/2026-09-30.md'), '---\nrhythm: log\ndone: [Gym]\n---\n');
+    assert.strictEqual(app.files.get('Rhythm/Log/2026-10-02.md'), '---\nrhythm: log\ndone: []\n---\n');
+  }
+
+  /* 12f. events can't be ticked */
+  assert.deepStrictEqual(await makeStore({ app: makeApp({}), settings: {} }).tick({ source: 'event', path: 'e' }, '2026-09-30'), { ok: false, reason: 'locked' });
+
+  /* 12g. a double click can't tick twice: a card already being written is
+          refused until the first write finishes */
+  {
+    let calls = 0;
+    const tasksPlugin = { apiV1: { executeToggleTaskDoneCommand: () => { calls++; return '- [ ] Pills 🔁 every day when done 📅 2026-09-28\n- [x] Pills 🔁 every day when done 📅 2026-09-28 ✅ 2026-09-27'; } } };
+    const app = makeApp({ 'H.md': '- [ ] Pills 🔁 every day when done 📅 2026-09-28' }, { 'obsidian-tasks-plugin': tasksPlugin });
+    const store = makeStore({ app, settings: {} });
+    const card = { key: 'H.md:0', source: 'tasks', path: 'H.md', line: 0, raw: '- [ ] Pills 🔁 every day when done 📅 2026-09-28' };
+    const both = await Promise.all([store.tick(card, '2026-09-27'), store.tick(card, '2026-09-27')]);
+    assert.deepStrictEqual(both, [{ ok: true }, { ok: false, reason: 'busy' }]);
+    assert.strictEqual(calls, 1);
+    assert.strictEqual(app.files.get('H.md'), '- [ ] Pills 🔁 every day when done 📅 2026-09-28\n- [x] Pills 🔁 every day when done 📅 2026-09-28 ✅ 2026-09-27');
+  }
+
+  /* 12h. CRLF notes stay CRLF through a Tasks tick: Tasks gets the line
+          without its \r, and every line it returns gets it back */
+  {
+    let seen = null;
+    const tasksPlugin = { apiV1: { executeToggleTaskDoneCommand: line => { seen = line; return '- [ ] x 🔁 every day ⏳ 2026-09-28\n- [x] x 🔁 every day ⏳ 2026-09-27 ✅ 2026-09-27'; } } };
+    const app = makeApp({ 'C.md': '# A\r\n- [ ] x 🔁 every day ⏳ 2026-09-27\r\nafter\r\n' }, { 'obsidian-tasks-plugin': tasksPlugin });
+    await makeStore({ app, settings: {} }).tick({ source: 'tasks', path: 'C.md', line: 1, raw: '- [ ] x 🔁 every day ⏳ 2026-09-27\r' }, '2026-09-27');
+    assert.strictEqual(seen, '- [ ] x 🔁 every day ⏳ 2026-09-27');
+    assert.strictEqual(app.files.get('C.md'), '# A\r\n- [ ] x 🔁 every day ⏳ 2026-09-28\r\n- [x] x 🔁 every day ⏳ 2026-09-27 ✅ 2026-09-27\r\nafter\r\n');
+  }
+
+  /* 12i. without Tasks the tick says so, so the board can tell you once */
+  {
+    const app = makeApp({ 'Home.md': '- [ ] Call plumber' });
+    const r = await makeStore({ app, settings: {} }).tick({ source: 'tasks', path: 'Home.md', line: 0, raw: '- [ ] Call plumber' }, '2026-09-30');
+    assert.deepStrictEqual(r, { ok: true, plain: true });
+  }
+
+  /* 12j. Nudge's own reason for a refusal comes through */
+  {
+    const nudge = { isOurs: () => true, path: () => 'Reminders.md', load: async () => ({ items: [] }), toggle: async () => ({ ok: false, reason: 'repeat' }) };
+    const r = await makeStore({ app: makeApp({}, { 'nudge-reminders': { store: nudge } }), settings: {} })
+      .tick({ source: 'nudge', path: 'Reminders.md', line: 0, raw: '- [ ] Pills 🔁 every day', group: '' }, '2026-09-30');
+    assert.deepStrictEqual(r, { ok: false, reason: 'repeat' });
+  }
+
+  /* 12k. a practice already done today: ticking its promise for another
+          day is refused, so that promise isn't silently lost */
+  {
+    const app = makeApp({
+      'Rhythm/Log/2026-09-30.md': '---\nrhythm: log\ndone: [Gym]\n---\n',
+      'Rhythm/Log/2026-10-02.md': '---\nrhythm: log\ndone: []\nplan: [Gym]\n---\n',
+    }, rhythm);
+    const r = await makeStore({ app, settings: {} }).tick({ source: 'practice', text: 'Gym', path: 'p', date: '2026-10-02' }, '2026-09-30');
+    assert.deepStrictEqual(r, { ok: false, reason: 'done-today' });
+    assert.strictEqual(app.files.get('Rhythm/Log/2026-10-02.md'), '---\nrhythm: log\ndone: []\nplan: [Gym]\n---\n');
+  }
+
   console.log('store-write OK');
 })().catch(e => { console.error(e); process.exit(1); });

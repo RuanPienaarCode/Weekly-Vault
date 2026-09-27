@@ -8,6 +8,7 @@ const L = require('./tasks-line');
 const RD = require('./rhythm/dates');
 
 const NUDGE_ID = 'nudge-reminders';
+const TASKS_ID = 'obsidian-tasks-plugin';
 const RHYTHM_ID = 'rhythm';
 /* Rhythm's folder names under its root (Rhythm's constants.js FOLDERS). */
 const RHYTHM_FOLDERS = { areas: 'Areas', practices: 'Practices', events: 'Events', log: 'Log' };
@@ -16,6 +17,16 @@ function makeStore(plugin) {
   const app = plugin.app;
   /* Sources that are installed but could not be read on the last load. */
   let problems = [];
+  /* Cards being written right now. A second tick or move of the same card
+     (a double click) is refused until the first write lands — otherwise a
+     repeating to-do could be completed twice. */
+  const inFlight = new Set();
+  const once = async (card, fn) => {
+    const key = card.key || `${card.source}:${card.path}:${card.line}:${card.text}`;
+    if (inFlight.has(key)) return { ok: false, reason: 'busy' };
+    inFlight.add(key);
+    try { return await fn(); } finally { inFlight.delete(key); }
+  };
 
   /* Nudge owns its note. Its reminders come through Nudge itself (#3b), so
      the note is skipped here and nothing appears twice. */
@@ -55,7 +66,7 @@ function makeStore(plugin) {
       const path = ours.path();
       return (items || []).map(r => ({
         source: 'nudge', path, line: r.line, raw: r.raw,
-        text: r.title, due: r.due || '', scheduled: r.scheduled || '', time: r.time || '', done: !!r.done,
+        text: r.title, due: r.due || '', scheduled: r.scheduled || '', doneDate: r.doneDate || '', time: r.time || '', done: !!r.done,
         priority: r.priority || 'normal', tags: r.tags || [], group: r.group || '',
       }));
     } catch (e) {
@@ -123,16 +134,21 @@ function makeStore(plugin) {
   /* Edit one line of a note, but only if it still says what the board
      read: if the author (or sync) changed it meanwhile, refuse rather than
      guess, and let the board reload. */
+  /* fn may return several lines (Tasks writes a repeating to-do's next
+     occurrence above the ticked one); they replace the one line. */
   async function editLine(card, fn) {
     const file = app.vault.getFileByPath(card.path);
     if (!file) return { ok: false, reason: 'missing' };
     let out = { ok: false, reason: 'changed' };
     /* One atomic read-modify-write (vault.process): a sync that lands
-       while we work can't be overwritten. split/join on \n keeps any \r. */
+       while we work can't be overwritten. split/join on \n keeps each
+       line's own \r; fn is given and returns lines without it. */
     await app.vault.process(file, text => {
       const lines = text.split('\n');
       if (lines[card.line] !== card.raw) return text;
-      lines[card.line] = fn(lines[card.line]);
+      const cr = card.raw.endsWith('\r') ? '\r' : '';
+      const bare = cr ? card.raw.slice(0, -1) : card.raw;
+      lines[card.line] = fn(bare).split('\n').map(l => l + cr).join('\n');
       out = { ok: true };
       return lines.join('\n');
     });
@@ -175,10 +191,19 @@ function makeStore(plugin) {
     return { ok: true };
   }
 
+  async function doneOn(date, name) {
+    const rr = rhythmRoot();
+    const f = rr && app.vault.getFileByPath(`${rr.root}/${RHYTHM_FOLDERS.log}/${date}.md`);
+    if (!f) return false;
+    const { fm } = parseFrontmatter(await app.vault.cachedRead(f));
+    return (Array.isArray(fm.done) ? fm.done : (fm.done ? [fm.done] : [])).map(String).includes(name);
+  }
+
   /* Put a card on another day. Each kind moves the way its owner moves it:
      a Tasks line by its ⏳ alone (📅 is never touched), a reminder through
      Nudge, a practice by its promise in Rhythm's log. Events are fixed. */
-  async function move(card, date) {
+  function move(card, date) { return once(card, () => moveNow(card, date)); }
+  async function moveNow(card, date) {
     if (card.source === 'event') return { ok: false, reason: 'locked' };
     if (card.source === 'tasks') return editLine(card, raw => L.setField(raw, 'scheduled', date));
     if (card.source === 'nudge') {
@@ -187,7 +212,7 @@ function makeStore(plugin) {
       /* The list (group) lets Nudge tell apart two reminders with the same
          text in different lists. */
       const r = await ours.setDue({ raw: card.raw, line: card.line, group: card.group }, date);
-      return r && r.ok === false ? { ok: false, reason: 'changed' } : { ok: true };
+      return r && r.ok === false ? { ok: false, reason: r.reason || 'changed' } : { ok: true };
     }
     if (card.source === 'practice') {
       /* Two writes, new day first (as Rhythm's movePlan): a failure half way
@@ -200,7 +225,40 @@ function makeStore(plugin) {
     return { ok: false, reason: 'unknown' };
   }
 
-  return { load, loadRhythm, move, problems: () => problems.slice() };
+  /* Tick a card done. Each kind is ticked the way its owner ticks it: a
+     Tasks line through Tasks itself (so 🔁 repeats and ✅ dates follow
+     your Tasks settings exactly), a reminder through Nudge, a practice as
+     done TODAY in Rhythm's log — releasing its promise to another day, if
+     it had one. Without Tasks, a plain [x]. */
+  function tick(card, today) { return once(card, () => tickNow(card, today)); }
+  async function tickNow(card, today) {
+    if (card.source === 'event') return { ok: false, reason: 'locked' };
+    if (card.source === 'tasks') {
+      const tp = app.plugins && app.plugins.plugins && app.plugins.plugins[TASKS_ID];
+      const api = tp && tp.apiV1 && typeof tp.apiV1.executeToggleTaskDoneCommand === 'function' ? tp.apiV1 : null;
+      const r = await editLine(card, raw => (api ? api.executeToggleTaskDoneCommand(raw, card.path) : L.setStatus(raw, 'x')));
+      /* plain: ticked without Tasks, so no ✅ date or repeat — the board
+         says so once. */
+      return r.ok && !api ? { ok: true, plain: true } : r;
+    }
+    if (card.source === 'nudge') {
+      const ours = nudge();
+      if (!ours || typeof ours.toggle !== 'function') return { ok: false, reason: 'no-nudge' };
+      const r = await ours.toggle({ raw: card.raw, line: card.line, group: card.group }, today);
+      return r && r.ok === false ? { ok: false, reason: r.reason || 'changed' } : { ok: true };
+    }
+    if (card.source === 'practice') {
+      /* Already done today, and this card is a promise for another day:
+         ticking it would add no session and only delete that promise. */
+      if (card.date && card.date !== today && await doneOn(today, card.text)) return { ok: false, reason: 'done-today' };
+      const done = await setRhythmFlag(today, 'done', card.text, true);
+      if (!done.ok || !card.date || card.date === today) return done;
+      return setRhythmFlag(card.date, 'plan', card.text, false);
+    }
+    return { ok: false, reason: 'unknown' };
+  }
+
+  return { load, loadRhythm, move, tick, problems: () => problems.slice() };
 }
 
 module.exports = { makeStore };

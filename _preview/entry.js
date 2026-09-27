@@ -54,6 +54,7 @@ const nudgeStore = {
   isOurs: p => p === 'Reminders.md', path: () => 'Reminders.md',
   load: async () => ({ items: reminders }),
   setDue: async (item, due) => { const r = reminders.find(x => x.line === item.line); if (r) r.due = due; return { ok: !!r }; },
+  toggle: async item => { const r = reminders.find(x => x.line === item.line); if (r) r.done = !r.done; return { ok: !!r }; },
 };
 const plugins = { rhythm: { settings: {} } };
 if (q.get('nonudge') !== '1') plugins['nudge-reminders'] = { store: nudgeStore };

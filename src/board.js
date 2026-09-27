@@ -23,6 +23,8 @@ function mountBoard(view) {
   let loading = null;
   let again = false;
   let showAllSlipped = false;
+  /* Days whose Done group is open, by date. */
+  const openDone = new Set();
   let lastTasks = [];
   let lastRhythm = null;
   const SLIPPED_PREVIEW = 5;
@@ -36,11 +38,36 @@ function mountBoard(view) {
     let r;
     try { r = await plugin.store.move(card, date); }
     catch (e) { console.error('Fortnight: move failed', e); r = { ok: false, reason: 'error' }; }
-    if (!r.ok) {
+    if (!r.ok && r.reason !== 'busy') {
       console.warn('Fortnight: move refused', r.reason, card);
-      const why = r.reason === 'changed' ? 'it changed in its note — the board has been refreshed'
-        : r.reason === 'locked' ? 'events are fixed' : 'something went wrong (see the console)';
-      new Notice(`Fortnight: couldn't move "${card.text}": ${why}.`);
+      new Notice(`Fortnight: couldn't move "${card.text}": ${REASON[r.reason] || 'something went wrong (see the console)'}.`);
+    }
+    await refresh();
+  }
+
+  /* Why a write was refused, in words. 'busy' (a double click) is silent. */
+  const REASON = {
+    changed: 'it changed in its note — the board has been refreshed',
+    locked: 'events are fixed',
+    repeat: "Nudge couldn't work out its next date",
+    'done-today': "it's already done today — that promise is kept for its day",
+    missing: 'its note no longer exists',
+    'no-nudge': "Nudge isn't available",
+    'no-rhythm': "Rhythm isn't available",
+  };
+
+  /* Tick a card done; the store routes it to Tasks, Nudge or Rhythm. */
+  async function tickCard(card) {
+    let r;
+    try { r = await plugin.store.tick(card, D.todayISO()); }
+    catch (e) { console.error('Fortnight: tick failed', e); r = { ok: false, reason: 'error' }; }
+    if (!r.ok && r.reason !== 'busy') {
+      console.warn('Fortnight: tick refused', r.reason, card);
+      new Notice(`Fortnight: couldn't tick "${card.text}": ${REASON[r.reason] || 'something went wrong (see the console)'}.`);
+    }
+    if (r.plain && !plugin._toldPlainTick) {
+      plugin._toldPlainTick = true;
+      new Notice('Fortnight: ticked as a plain [x]. Install the Tasks plugin to get ✅ dates and repeating to-dos.', 8000);
     }
     await refresh();
   }
@@ -91,11 +118,25 @@ function mountBoard(view) {
   }
 
   function renderCard(list, card, board, slipped) {
-    const li = list.createEl('li', { cls: [`is-${card.source}`, slipped ? 'is-slipped' : ''] });
+    const li = list.createEl('li', { cls: [`is-${card.source}`, slipped ? 'is-slipped' : '', card.done ? 'is-done' : ''] });
+    /* The tick sits beside the row, not inside it: a button can't hold a
+       button. Events are fixed, done cards are done. */
+    if (card.source !== 'event' && !card.done) {
+      const tick = li.createEl('button', { cls: 'fn-tick', attr: { type: 'button', 'aria-label': `Mark "${card.text}" done` } });
+      setIcon(tick, 'circle');
+      tick.addEventListener('click', e => {
+        e.stopPropagation();
+        if (tick.disabled) return;
+        tick.disabled = true;
+        tick.addClass('is-ticking');
+        setIcon(tick, 'check-circle-2');
+        tickCard(card);
+      });
+    }
     const row = li.createEl('button', { cls: 'fn-row', attr: { type: 'button', title: `Open in ${card.path}` } });
     row.addEventListener('click', () => plugin.openTask(card));
     byKey.set(card.key, card);
-    makeDraggable(row, card, board);
+    if (!card.done) makeDraggable(row, card, board);
     if (card.source === 'event') {
       /* A fixed appointment: time in front, a lock — it can't be dragged. */
       row.createSpan({ cls: 'fn-evtime', text: card.time || 'All day' });
@@ -151,11 +192,30 @@ function mountBoard(view) {
     const card = col.createDiv({ cls: 'fn-card' });
     makeDropTarget(col, day.date);
     if (!day.cards.length) {
-      card.createDiv({ cls: 'fn-empty-day', text: 'Nothing planned' });
+      card.createDiv({ cls: 'fn-empty-day', text: day.done.length ? 'All done' : 'Nothing planned' });
+      renderDone(card, day, board);
       return;
     }
     const list = card.createEl('ul', { cls: 'fn-list' });
     for (const c of day.cards) renderCard(list, c, board);
+    renderDone(card, day, board);
+  }
+
+  /* What you got through: collapsed under the day, a tap to open. */
+  function renderDone(card, day, board) {
+    if (!day.done.length) return;
+    const open = openDone.has(day.date);
+    const toggle = card.createEl('button', {
+      cls: 'fn-done', attr: { type: 'button', 'aria-expanded': String(open) },
+      text: `Done · ${day.done.length}`,
+    });
+    toggle.addEventListener('click', () => {
+      if (open) openDone.delete(day.date); else openDone.add(day.date);
+      render(lastTasks, lastRhythm);
+    });
+    if (!open) return;
+    const list = card.createEl('ul', { cls: ['fn-list', 'fn-donelist'] });
+    for (const c of day.done) renderCard(list, c, board);
   }
 
   /* Still open from a day gone by: oldest first, a few at a time. */

@@ -92,7 +92,7 @@ Ruan's own plugins come first. Nudge and Rhythm cards now appear straight after 
   - Out: reordering within a day (#8), Next week and Later (#7).
   - Blocked by: #3, #3b, #3c
 
-- [ ] **#5 Tick a to-do done**
+- [x] **#5 Tick a to-do done** — done 27 Sep 2026; a card being written can't be ticked or moved again until it lands
   - AC:
     - With Tasks installed, ticking calls `apiV1.executeToggleTaskDoneCommand`, so a 🔁 line produces its next occurrence exactly as Tasks would.
     - Without Tasks, it does a plain `[x]` tick and shows a one-time notice.
