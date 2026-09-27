@@ -5,7 +5,7 @@ const proto = HTMLElement.prototype;
 if (!proto.createEl) {
   proto.createEl = function (tag, o = {}) {
     const el = document.createElement(tag);
-    if (o.cls) el.className = Array.isArray(o.cls) ? o.cls.join(' ') : o.cls;
+    if (o.cls) el.className = Array.isArray(o.cls) ? o.cls.filter(Boolean).join(' ') : o.cls;
     if (o.text != null) el.textContent = o.text;
     if (o.attr) for (const k of Object.keys(o.attr)) el.setAttribute(k, o.attr[k]);
     this.appendChild(el);

@@ -126,4 +126,58 @@ const WED = '2026-09-30';
   assert.deepStrictEqual(texts(p, '2026-10-02'), ['Planned only']);
 }
 
+/* 10. anything open whose day has passed is Slipped: off its old day, in
+       b.slipped (oldest first), with that day kept as `date` — never moved */
+{
+  const b = planBoard({ today: WED, settings: {}, tasks: [
+    task('- [ ] Planned Monday ⏳ 2026-09-28', 'A.md', 1),
+    task('- [ ] Way back ⏳ 2026-08-12', 'A.md', 2),
+    task('- [ ] Deadline gone 📅 2026-09-29', 'A.md', 3),
+    task('- [ ] Planned past, due later ⏳ 2026-09-29 📅 2026-10-02', 'A.md', 4),
+    task('- [ ] Today still today ⏳ 2026-09-30', 'A.md', 5),
+    task('- [x] Done in the past ⏳ 2026-09-28 ✅ 2026-09-28', 'A.md', 6),
+    task('- [-] Dropped in the past ⏳ 2026-09-28', 'A.md', 7),
+    { source: 'nudge', path: 'Reminders.md', line: 2, text: 'Missed reminder', due: '2026-09-15', scheduled: '', time: '', done: false, priority: 'normal', raw: '' },
+  ] });
+  assert.deepStrictEqual(b.slipped.map(c => [c.text, c.date]), [
+    ['Way back', '2026-08-12'],
+    ['Missed reminder', '2026-09-15'],
+    ['Planned Monday', '2026-09-28'],
+    ['Deadline gone', '2026-09-29'],
+    ['Planned past, due later', '2026-09-29'],
+  ]);
+  assert.strictEqual(b.slipped[3].deadlineOnly, true);
+  assert.strictEqual(b.slipped[4].due, '2026-10-02');
+  assert.deepStrictEqual(texts(b, '2026-09-28'), []);
+  assert.deepStrictEqual(texts(b, '2026-09-29'), []);
+  assert.deepStrictEqual(texts(b, WED), ['Today still today']);
+}
+
+/* 10b. on Sunday, Slipped is what's before today — not the week ahead */
+{
+  const b = planBoard({ today: '2026-10-04', settings: {}, tasks: [
+    task('- [ ] Missed Saturday ⏳ 2026-10-03'),
+    task('- [ ] Sunday thing ⏳ 2026-10-04'),
+  ] });
+  assert.deepStrictEqual(b.slipped.map(c => c.text), ['Missed Saturday']);
+  assert.deepStrictEqual(texts(b, '2026-10-04'), ['Sunday thing']);
+}
+
+/* 10c. nothing slipped is an empty list, not missing */
+assert.deepStrictEqual(planBoard({ today: WED, tasks: [], settings: {} }).slipped, []);
+
+/* 10d. excluded folders apply to Slipped; same-day ties go by time, then
+       priority, then note and line */
+{
+  const nudge = (text, due, time) => ({ source: 'nudge', path: 'Reminders.md', line: 9, text, due, scheduled: '', time, done: false, priority: 'normal', raw: '' });
+  const b = planBoard({ today: WED, settings: { excludeFolders: ['Archive'] }, tasks: [
+    task('- [ ] Archived and late ⏳ 2026-09-20', 'Archive/Old.md', 1),
+    task('- [ ] Plain late ⏳ 2026-09-20', 'B.md', 2),
+    task('- [ ] Urgent late ⏳ 2026-09-20 ⏫', 'C.md', 3),
+    nudge('Timed late', '2026-09-20', '09:00'),
+    nudge('Newer timed', '2026-09-28', '07:00'),
+  ] });
+  assert.deepStrictEqual(b.slipped.map(c => c.text), ['Timed late', 'Urgent late', 'Plain late', 'Newer timed']);
+}
+
 console.log('plan-board OK');

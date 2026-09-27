@@ -77,14 +77,21 @@ function planBoard({ today, tasks = [], settings = {} }) {
     days.push({ date, past: date < today, isToday: date === today, cards: [] });
   }
   const byDate = new Map(days.map(d => [d.date, d]));
+  /* Still open and its day has gone: Slipped, shown at the top of Today so
+     it can't be missed. Its old day is kept as `date` for the "from" label;
+     nothing is rolled forward in the note. */
+  const slipped = [];
   for (const task of tasks) {
     if (inFolders(task.path, settings.excludeFolders)) continue;
     const card = cardFor(task);
-    const d = card && byDate.get(card.date);
+    if (!card) continue;
+    if (card.date < today) { slipped.push(card); continue; }
+    const d = byDate.get(card.date);
     if (d) d.cards.push(card);
   }
   for (const d of days) d.cards.sort(byTimeThenPriority);
-  return { weekStart: start, today, days };
+  slipped.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : byTimeThenPriority(a, b)));
+  return { weekStart: start, today, days, slipped };
 }
 
 module.exports = { planBoard };

@@ -28,6 +28,12 @@ const files = q.get('empty') === '1' ? {} : {
     `- [ ] Draft the proposal ⏳ ${d(-1)}`,
     `- [ ] Review pull requests ⏳ ${d(2)} 🔽`,
     `> - [ ] Prepare slides for Friday ⏳ ${d(4)} 🔼`,
+    `- [ ] Renew passport ⏳ ${d(-40)}`,
+    `- [ ] Pay the rates 📅 ${d(-3)} ⏫`,
+    `- [ ] Email the landlord ⏳ ${d(-9)}`,
+    `- [ ] Fix the gate ⏳ ${d(-20)}`,
+    `- [ ] Order printer ink ⏳ ${d(-2)}`,
+    `- [ ] Book the vet ⏳ ${d(-6)}`,
   ].join('\n'),
   'Templates/Daily.md': `- [ ] Template placeholder ⏳ ${d(0)}`,
 };

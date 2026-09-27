@@ -99,7 +99,7 @@ Ruan's own plugins come first. Nudge and Rhythm cards now appear straight after 
   - Out: editing from Vista.
   - Blocked by: #5
 
-- [ ] **#6 Slipped cards show at the top of Today; past days collapse**
+- [x] **#6 Slipped cards show at the top of Today; past days collapse** — done 27 Sep 2026
   - AC:
     - Open cards with ⏳ before today appear in a Slipped group at the top of Today.
     - Past days this week render as thin columns.
