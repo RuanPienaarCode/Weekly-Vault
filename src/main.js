@@ -23,6 +23,10 @@ class FortnightPlugin extends Plugin {
     this.registerView(VIEW_TYPE, leaf => new FortnightView(leaf, this));
     this.addRibbonIcon(ICON, 'Open Fortnight', () => this.activateView());
     this.addCommand({ id: 'open', name: 'Open Fortnight', callback: () => this.activateView() });
+    this.addCommand({
+      id: 'welcome', name: 'Show the welcome again',
+      callback: async () => { await this.activateView(); for (const v of this.boardViews()) v.ctl.showIntro(); },
+    });
     this.addSettingTab(new FortnightSettingTab(this.app, this));
 
     /* Any note edited, anywhere (including on another device via sync):

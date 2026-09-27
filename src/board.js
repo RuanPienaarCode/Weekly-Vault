@@ -4,6 +4,7 @@
 
 const { setIcon } = require('obsidian');
 const { planBoard } = require('./plan');
+const { introScreens, shouldShowIntro } = require('./intro');
 const D = require('./dates');
 
 const { DOW, dayNum, short } = D;
@@ -12,6 +13,13 @@ const noteName = path => path.split('/').pop().replace(/\.md$/, '');
 function mountBoard(view) {
   const plugin = view.plugin;
   const root = view.contentEl;
+  root.empty();
+  root.addClass('fortnight');
+  /* The board redraws inside main; the welcome lies over it, untouched by
+     a redraw underneath. */
+  const main = root.createDiv({ cls: 'fn-main' });
+  let intro = null;
+  let lastBoard = null;
   let loading = null;
   let again = false;
   let showAllSlipped = false;
@@ -102,7 +110,7 @@ function mountBoard(view) {
       more.addEventListener('click', () => {
         showAllSlipped = !showAllSlipped;
         render(lastTasks, lastRhythm);
-        const again = root.querySelector('.fn-more');
+        const again = main.querySelector('.fn-more');
         if (again) again.focus();
       });
     }
@@ -111,7 +119,7 @@ function mountBoard(view) {
 
   /* Weekly practices still looking for a day, per Rhythm. */
   function renderTray(board) {
-    const tray = root.createDiv({ cls: 'fn-tray' });
+    const tray = main.createDiv({ cls: 'fn-tray' });
     tray.createDiv({ cls: 'fn-gh', text: 'Practices owed' });
     const card = tray.createDiv({ cls: 'fn-tray-card' });
     for (const t of board.tray) {
@@ -129,19 +137,20 @@ function mountBoard(view) {
     lastTasks = tasks;
     lastRhythm = rhythm;
     const board = planBoard({ today: D.todayISO(), tasks, rhythm, settings: plugin.settings });
+    lastBoard = board;
+    if (intro) intro.update(board);
     /* A redraw keeps the reader where they were on a wide board. */
-    const prev = root.querySelector('.fn-board');
+    const prev = main.querySelector('.fn-board');
     const scrollLeft = prev ? prev.scrollLeft : 0;
-    root.empty();
-    root.addClass('fortnight');
-    const top = root.createDiv({ cls: 'fn-top' });
+    main.empty();
+    const top = main.createDiv({ cls: 'fn-top' });
     top.createSpan({ cls: 'fn-range', text: `${short(board.weekStart)} – ${short(D.addDays(board.weekStart, 6))}` });
     /* Installed but unreadable: say so quietly, once, above the board. */
     if (plugin.store.problems().includes('nudge')) {
       top.createSpan({ cls: 'fn-problem', text: 'Nudge reminders could not be read — they are missing from this board.' });
     }
     if (board.tray.length) renderTray(board);
-    const boardEl = root.createDiv({ cls: 'fn-board' });
+    const boardEl = main.createDiv({ cls: 'fn-board' });
     for (const day of board.days) renderDay(boardEl, day, board);
     boardEl.scrollLeft = scrollLeft;
   }
@@ -162,7 +171,84 @@ function mountBoard(view) {
     return loading;
   }
 
-  return { start: refresh, refresh, stop() { root.empty(); } };
+  /* The daily welcome: greeting → "Plan the week" / "Plan today" → the
+     board, each fading into the next. A tap moves on at once. */
+  const WELCOME_MS = 1200;
+  const PLAN_MS = 2200;
+  const FADE_MS = 450;
+
+  function showIntro() {
+    if (!lastBoard || intro) return;
+    const now = new Date();
+    const nowAt = { date: D.todayISO(now), hour: now.getHours() };
+    const screens = introScreens(lastBoard, nowAt, plugin.settings);
+    /* role=status: announced politely, never a focus trap. It takes focus
+       only so Escape / Enter / Space can dismiss it. */
+    const el = root.createDiv({ cls: 'fn-intro', attr: { role: 'status', 'aria-live': 'polite', tabindex: '-1' } });
+    /* Cover what is on screen, even on a board scrolled down. */
+    el.style.top = `${root.scrollTop}px`;
+    el.style.height = `${root.clientHeight}px`;
+    const one = el.createDiv({ cls: 'fn-intro-screen' });
+    one.createDiv({ cls: 'fn-intro-title', text: screens.welcome.title });
+    one.createDiv({ cls: 'fn-intro-sub', text: screens.welcome.sub });
+    const two = el.createDiv({ cls: 'fn-intro-screen' });
+    two.createDiv({ cls: 'fn-intro-title', text: screens.plan.title });
+    const summary = two.createDiv({ cls: 'fn-intro-sub', text: screens.plan.summary });
+    el.createDiv({ cls: 'fn-intro-hint', text: 'Tap to skip' });
+
+    /* One stage counter that only moves forward: 0 greeting, 1 plan,
+       2 fading out, 3 gone. Taps and timers both just ask for the next
+       stage, so a double tap can never skip the clean-up. */
+    let stage = -1;
+    let timer = null;
+    let frame = null;
+    const go = n => {
+      if (n <= stage) return;
+      stage = n;
+      window.clearTimeout(timer);
+      if (n === 0) { one.addClass('is-in'); timer = window.setTimeout(() => go(1), WELCOME_MS); }
+      else if (n === 1) { one.removeClass('is-in'); two.addClass('is-in'); timer = window.setTimeout(() => go(2), PLAN_MS); }
+      else if (n === 2) { el.addClass('is-out'); timer = window.setTimeout(() => go(3), FADE_MS); }
+      else finish();
+    };
+    function finish() {
+      window.clearTimeout(timer);
+      if (frame != null) window.cancelAnimationFrame(frame);
+      el.remove();
+      intro = null;
+    }
+    el.addEventListener('click', () => go(stage + 1));
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Escape') go(3);
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(stage + 1); }
+    });
+    intro = {
+      finish,
+      /* The board may finish loading after the welcome appears (at startup,
+         before the vault is indexed): keep the summary true to it. */
+      update(board) { summary.setText(introScreens(board, nowAt, plugin.settings).plan.summary); },
+    };
+    el.focus();
+    /* Next frame, so the greeting fades in rather than appearing. */
+    frame = window.requestAnimationFrame(() => { frame = null; go(0); });
+  }
+
+  /* First open of the day: remember it at once (without redrawing), so a
+     second tab or a reload doesn't greet you twice. */
+  async function start() {
+    await refresh();
+    const today = D.todayISO();
+    if (shouldShowIntro(plugin.settings, today)) {
+      plugin.settings.lastWelcome = today;
+      if (plugin.saveData) await plugin.saveData(plugin.settings);
+      showIntro();
+    }
+  }
+
+  return {
+    start, refresh, showIntro,
+    stop() { if (intro) intro.finish(); root.empty(); },
+  };
 }
 
 module.exports = { mountBoard };

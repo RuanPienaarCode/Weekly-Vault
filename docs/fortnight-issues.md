@@ -74,6 +74,15 @@ Ruan's own plugins come first. Nudge and Rhythm cards now appear straight after 
   - Out: placing and ticking practices (#4, #5); creating events (#10).
   - Blocked by: #3
 
+- [x] **#3d A daily welcome fades into the board** — done 27 Sep 2026
+  - AC:
+    - The first time Fortnight opens each day: a greeting ("Good morning", plus the name from settings if set) and the date, then "Plan the week" (on the week's last and first days) or "Plan today", with a line saying what is waiting, then the board.
+    - Each screen fades into the next on its own (about 1.2s, then 2.2s); a tap moves on at once. Reduced motion swaps without fading.
+    - Settings: "Your name" (blank by default) and "Daily welcome" (on). A command replays it.
+  - In: `intro.js` (pure, tested), overlay in the view, settings.
+  - Out: the guided Sunday steps (#16), which this screen will lead into.
+  - Blocked by: #3c
+
 - [ ] **#4 Drag a to-do to another day**
   - AC:
     - Dropping a card on a day sets ⏳ to that date. 📅 is untouched.

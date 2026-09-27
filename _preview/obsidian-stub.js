@@ -13,6 +13,7 @@ if (!proto.createEl) {
   };
   proto.createDiv = function (o) { return this.createEl('div', typeof o === 'string' ? { cls: o } : o); };
   proto.createSpan = function (o) { return this.createEl('span', typeof o === 'string' ? { cls: o } : o); };
+  proto.setText = function (t) { this.textContent = t; };
   proto.empty = function () { while (this.firstChild) this.removeChild(this.firstChild); };
   proto.addClass = function (...c) { this.classList.add(...c); };
   proto.removeClass = function (...c) { this.classList.remove(...c); };

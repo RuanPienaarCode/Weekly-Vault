@@ -11,6 +11,12 @@ const DEFAULT_SETTINGS = {
   weekStart: 1,
   /* Folders whose to-dos never appear, e.g. templates or an archive. */
   excludeFolders: [],
+  /* The daily welcome: greeting (with a name, if set), then "Plan the week"
+     or "Plan today", fading into the board. lastWelcome is the day it last
+     showed, so it shows once a day. */
+  name: '',
+  showWelcome: true,
+  lastWelcome: '',
 };
 
 module.exports = { VIEW_TYPE, ICON, DEFAULT_SETTINGS };

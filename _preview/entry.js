@@ -1,6 +1,6 @@
 /* Harness entry: mounts the REAL view (src/view.js) over an in-memory vault
    of generic sample notes, dated around today, through the REAL store.
-     ?theme=light   ?mobile=1   ?empty=1   ?nonudge=1 */
+     ?theme=light   ?mobile=1   ?empty=1   ?nonudge=1   ?nowelcome=1   ?name=Sam */
 const { FortnightView } = require('../src/view');
 const { makeStore } = require('../src/store');
 const { DEFAULT_SETTINGS } = require('../src/constants');
@@ -56,7 +56,8 @@ if (q.get('nonudge') !== '1') plugins['nudge-reminders'] = { store: nudgeStore }
 const app = makeApp(files, plugins);
 app.workspace = { getLeaf: () => ({ openFile: async (f, o) => alert(`Would open ${f.path} at line ${o.eState.line + 1}`) }) };
 
-const plugin = { app, settings: Object.assign({}, DEFAULT_SETTINGS, { excludeFolders: ['Templates'] }) };
+const plugin = { app, settings: Object.assign({}, DEFAULT_SETTINGS, { excludeFolders: ['Templates'], name: q.get('name') || '' }), async saveData() {} };
+if (q.get('nowelcome') === '1') plugin.settings.showWelcome = false;
 plugin.store = makeStore(plugin);
 plugin.openTask = async card => app.workspace.getLeaf().openFile(app.vault.getFileByPath(card.path), { eState: { line: card.line } });
 const view = new FortnightView({ contentEl: document.getElementById('app') }, plugin);
