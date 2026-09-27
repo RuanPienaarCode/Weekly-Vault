@@ -48,6 +48,28 @@ class FortnightSettingTab extends PluginSettingTab {
     const warning = containerEl.createDiv({ cls: 'setting-item-description mod-warning' });
     this.warnIfHidden(warning);
     new Setting(containerEl)
+      .setName('Later: also show undated to-dos from')
+      .setDesc('Later always shows the planner note\'s undated to-dos. Add folders here to include theirs too. One folder per line.')
+      .addTextArea(t => t
+        .setPlaceholder('Projects')
+        .setValue((this.plugin.settings.laterFolders || []).join('\n'))
+        .onChange(async v => {
+          this.plugin.settings.laterFolders = v.split('\n').map(x => x.trim()).filter(Boolean);
+          await this.plugin.saveSettings();
+        }));
+    new Setting(containerEl)
+      .setName('Later tag')
+      .setDesc('A to-do from another note that you drop on Later gets this tag, so it stays in Later. Putting it back on a day removes it.')
+      .addText(t => t
+        .setPlaceholder('#later')
+        .setValue(this.plugin.settings.laterTag || '#later')
+        .onChange(async v => {
+          /* Only what Obsidian reads as part of a tag: letters, digits, _ - / */
+          const tag = v.trim().replace(/^#+/, '').replace(/[^\p{L}\p{N}_\-/]/gu, '');
+          this.plugin.settings.laterTag = tag ? (tag.startsWith('#') ? tag : `#${tag}`) : '#later';
+          await this.plugin.saveSettings();
+        }));
+    new Setting(containerEl)
       .setName('Excluded folders')
       .setDesc('To-dos in these folders never appear on the board. One folder per line, e.g. Templates.')
       .addTextArea(t => t

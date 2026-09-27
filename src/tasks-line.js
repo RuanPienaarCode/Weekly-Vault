@@ -77,7 +77,7 @@ function scan(raw) {
     }
     end = start;
   }
-  return { indent, marker, status, rest, textEnd: end, tailAt: base + tail.index, blockRef: tail[1] || '', tokens };
+  return { indent, marker, status, rest, textEnd: end, textEndAt: base + end, tailAt: base + tail.index, blockRef: tail[1] || '', tokens };
 }
 
 function parseTask(raw) {
@@ -125,6 +125,30 @@ function setField(raw, name, value) {
   return s.slice(0, at) + before + WRITE_MARK[name] + ' ' + value + after + s.slice(at);
 }
 
+/* One whole tag, case-insensitive: "#later" but never "#laterish" or
+   "#later/sub". A lookahead (not lookbehind) is fine on iOS 15. */
+const tagRe = (tag, flags) => new RegExp(`(^|[ \\t])(${String(tag).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?=[ \\t\\r,.;:!?)\\]]|$)`, flags);
+
+const hasTag = (raw, tag) => tagRe(tag, 'i').test(String(raw));
+
+/* Add a tag at the end of the description — before the Tasks fields, so
+   Tasks still reads every one of them. Never twice. */
+function addTag(raw, tag) {
+  const s = String(raw);
+  const p = scan(s);
+  if (!p || hasTag(s, tag)) return s;
+  let at = p.textEndAt;
+  while (at > 0 && (s[at - 1] === ' ' || s[at - 1] === '\t')) at--;
+  return s.slice(0, at) + ' ' + tag + s.slice(at);
+}
+
+/* Remove a tag (and the one space before each copy), wherever it sits. */
+function removeTag(raw, tag) {
+  const s = String(raw);
+  if (!scan(s)) return s;
+  return s.replace(tagRe(tag, 'gi'), '');
+}
+
 /* Change only the character inside the box. Drop writes '-' (cancelled).
    Ticking done goes through Tasks itself; this writes a plain 'x' only when
    Tasks isn't installed. */
@@ -143,4 +167,4 @@ function setStatus(raw, ch) {
    Fortnight doesn't know. Done is [x]/[X]; cancelled is [-]. */
 const isOpen = t => !!t && !t.done && !t.cancelled;
 
-module.exports = { parseTask, isOpen, setField, setStatus, PRIORITY_RANK };
+module.exports = { parseTask, isOpen, setField, setStatus, addTag, removeTag, hasTag, PRIORITY_RANK };

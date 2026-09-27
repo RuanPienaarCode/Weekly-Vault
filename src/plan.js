@@ -54,6 +54,37 @@ function reminderCard(r, today) {
   };
 }
 
+/* The planner note's path, tidied — ONE reading shared by the board and the
+   store: one kind of slash, no "./" or leading "/", ".md" added (a path
+   without it is a file Obsidian never lists as a note). */
+function plannerPathOf(settings) {
+  let p = String((settings && settings.plannerNote) || 'Planning/Fortnight.md').trim()
+    .replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^(\.\/|\/)+/, '');
+  if (!p || p.endsWith('/')) p += 'Fortnight.md';
+  return /\.md$/i.test(p) ? p : `${p}.md`;
+}
+
+/* An open line with no day (no ⏳, no 📅): parked in Next week if its 🛫 is
+   in a week still to come; in Later if its 🛫 week has come without a day
+   (never lost), or if it is undated and lives in the planner note or an
+   included folder. Anything else undated stays off the board. */
+function undatedCard(task, nextWeekStart, settings) {
+  if (task.source === 'nudge') return null;
+  const t = L.parseTask(task.raw);
+  if (!L.isOpen(t) || t.scheduled || t.due) return null;
+  const base = {
+    key: `${task.path}:${task.line}`, source: 'tasks', path: task.path, line: task.line, raw: task.raw,
+    text: t.text, scheduled: '', due: '', start: t.start, time: '',
+    deadlineOnly: false, priority: t.priority, tags: t.tags, done: false, date: '', tagged: false,
+  };
+  if (t.start) return Object.assign(base, { slot: t.start >= nextWeekStart ? 'nextWeek' : 'later' });
+  const planner = plannerPathOf(settings);
+  if (task.path === planner || inFolders(task.path, settings.laterFolders)) return Object.assign(base, { slot: 'later' });
+  /* Parked in Later from a note Later doesn't otherwise read (Q36). */
+  if (L.hasTag(task.raw, settings.laterTag || '#later')) return Object.assign(base, { slot: 'later', tagged: true });
+  return null;
+}
+
 /* A folder setting matches the whole folder: "Templates" hides
    Templates/x.md and Templates/Sub/y.md, never MyTemplates/z.md. */
 function inFolders(path, folders) {
@@ -84,6 +115,8 @@ function practiceCard(p, date) {
 /* Within a day: events first, in Rhythm's own order (time then name, so an
    all-day event leads); then anything at a set time, earliest first; then
    by priority, then where the line lives. */
+const byPlace = (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0) || a.line - b.line;
+
 function byTimeThenPriority(a, b) {
   const ea = a.source === 'event', eb = b.source === 'event';
   if (ea !== eb) return ea ? -1 : 1;
@@ -114,6 +147,12 @@ function planBoard({ today, tasks = [], settings = {}, rhythm = null }) {
     days.push({ date, past: date < today, isToday: date === today, cards: [], done: [], dailyCount: 0 });
   }
   const byDate = new Map(days.map(d => [d.date, d]));
+  /* Next week: the seven days after the board's week, plus "any day". */
+  const nwStart = D.addDays(start, 7);
+  const nextWeek = { start: nwStart, days: [], anyDay: [], count: 0 };
+  for (let i = 0; i < 7; i++) nextWeek.days.push({ date: D.addDays(nwStart, i), cards: [], done: [], dailyCount: 0 });
+  const nwByDate = new Map(nextWeek.days.map(d => [d.date, d]));
+  const later = [];
   /* Still open and its day has gone: Slipped, shown at the top of Today so
      it can't be missed. Its old day is kept as `date` for the "from" label;
      nothing is rolled forward in the note. */
@@ -121,16 +160,27 @@ function planBoard({ today, tasks = [], settings = {}, rhythm = null }) {
   for (const task of tasks) {
     if (inFolders(task.path, settings.excludeFolders)) continue;
     const card = cardFor(task, today);
-    if (!card) continue;
+    if (!card) {
+      const parked = undatedCard(task, nwStart, settings);
+      if (parked) (parked.slot === 'later' ? later : nextWeek.anyDay).push(parked);
+      continue;
+    }
     if (card.done) { const d = byDate.get(card.date); if (d) d.done.push(card); continue; }
     if (card.date < today) { slipped.push(card); continue; }
     const d = byDate.get(card.date);
-    if (d) d.cards.push(card);
+    if (d) { d.cards.push(card); continue; }
+    const n = nwByDate.get(card.date);
+    if (n) n.cards.push(Object.assign(card, { slot: 'nextWeek' }));
   }
-  const tray = rhythm ? placeRhythm(rhythm, days, today, start, byDate) : [];
+  const tray = rhythm ? placeRhythm(rhythm, days, today, start, byDate, nextWeek.days, nwByDate) : [];
   for (const d of days) { d.cards.sort(byTimeThenPriority); d.done.sort(byTimeThenPriority); }
+  for (const d of nextWeek.days) d.cards.sort(byTimeThenPriority);
+  nextWeek.anyDay.sort(byPlace);
+  const planner = plannerPathOf(settings);
+  later.sort((a, b) => ((b.path === planner) - (a.path === planner)) || byPlace(a, b));
+  nextWeek.count = nextWeek.anyDay.length + nextWeek.days.reduce((n, d) => n + d.cards.length, 0);
   slipped.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : byTimeThenPriority(a, b)));
-  return { weekStart: start, today, days, slipped, tray };
+  return { weekStart: start, today, days, slipped, tray, nextWeek, later };
 }
 
 /* Rhythm on the board, all by Rhythm's own rules: events on their day,
@@ -138,12 +188,19 @@ function planBoard({ today, tasks = [], settings = {}, rhythm = null }) {
    the tray — weekly and monthly practices with sessions still to place (its
    shelf(), as on Rhythm's own Plan board). The tray looks from the first day still ahead to the end of the
    week showing: on Sunday that is the whole week ahead. */
-function placeRhythm(data, days, today, start, byDate) {
+function placeRhythm(data, days, today, start, byDate, nwDays, nwByDate) {
   const weekStart = data.weekStart == null ? 1 : data.weekStart;
   for (const e of data.events || []) {
     const d = byDate.get(e.date);
-    if (d) d.cards.push(eventCard(e));
+    if (d) { d.cards.push(eventCard(e)); continue; }
+    const n = nwByDate.get(e.date);
+    if (n) n.cards.push(Object.assign(eventCard(e), { slot: 'nextWeek' }));
   }
+  /* Practices already promised to a day next week show there too. */
+  RM.boardDays(data, nwDays[0].date, 7, { weekStart, events: [] }).forEach((b, i) => {
+    nwDays[i].dailyCount = b.dailyCount;
+    for (const { p } of b.planned) nwDays[i].cards.push(Object.assign(practiceCard(p, b.date), { slot: 'nextWeek' }));
+  });
   const per = RM.boardDays(data, days[0].date, days.length, { weekStart, events: [] });
   per.forEach((b, i) => {
     days[i].dailyCount = b.dailyCount;
@@ -161,4 +218,4 @@ function placeRhythm(data, days, today, start, byDate) {
   }));
 }
 
-module.exports = { planBoard };
+module.exports = { planBoard, plannerPathOf };

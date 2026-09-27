@@ -30,6 +30,7 @@ export class Modal {}
 /* Enough of Obsidian's Menu to show and click a context menu. */
 export class Menu {
   constructor() { this.items = []; }
+  addSeparator() { return this; }
   addItem(fn) {
     const it = { title: '', disabled: false, cb: null };
     const api = { setTitle: t => { it.title = t; return api; }, setIcon: () => api, setDisabled: d => { it.disabled = d; return api; }, onClick: cb => { it.cb = cb; return api; } };
@@ -50,9 +51,21 @@ export class Menu {
     document.body.appendChild(m);
   }
 }
-export class Notice { constructor(msg) { console.log('[notice]', msg); } }
+/* Draws the notice (text or a fragment with buttons) top-right, as Obsidian does. */
+export class Notice {
+  constructor(msg, ms = 4000) {
+    this.el = document.createElement('div');
+    this.el.className = 'stub-notice';
+    this.el.style.cssText = 'position:fixed;top:12px;right:12px;z-index:70;background:#222;color:#fff;padding:10px 14px;border-radius:8px;font:13px system-ui;max-width:360px';
+    if (typeof msg === 'string') this.el.textContent = msg; else this.el.appendChild(msg);
+    document.body.appendChild(this.el);
+    console.log('[notice]', this.el.textContent);
+    setTimeout(() => this.hide(), ms);
+  }
+  hide() { this.el.remove(); }
+}
 /* A text glyph per icon name, so icon-only buttons are visible here. */
-const GLYPH = { plus: '+', circle: '○', 'check-circle-2': '✓', lock: '🔒', bell: '🔔', repeat: '↻', sun: '☀', calendar: '▦' };
+const GLYPH = { inbox: '▭', 'calendar-range': '▦', plus: '+', circle: '○', 'check-circle-2': '✓', lock: '🔒', bell: '🔔', repeat: '↻', sun: '☀', calendar: '▦' };
 export function setIcon(el, name) { el.textContent = GLYPH[name] || ''; }
 export const Platform = { isMobile: new URLSearchParams(location.search).get('mobile') === '1' };
 export const normalizePath = p => p.replace(/\\/g, '/').replace(/\/+$/, '');

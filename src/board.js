@@ -29,6 +29,8 @@ function mountBoard(view) {
   /* What is typed in each day's add field, kept across redraws (a sync or
      the previous add landing mid-typing must not wipe it). */
   const drafts = new Map();
+  /* Next week shown as its seven days (else one summary column). */
+  let nextOpen = false;
   /* Days whose Done group is open, by date. */
   const openDone = new Set();
   let lastTasks = [];
@@ -60,6 +62,8 @@ function mountBoard(view) {
     missing: 'its note no longer exists',
     'no-nudge': "Nudge isn't available",
     'no-rhythm': "Rhythm isn't available",
+    'needs-day': 'reminders and practices need a day — drop it on one',
+    'has-deadline': 'it has a 📅 deadline, so it stays on its due day',
   };
 
   /* Tick a card done; the store routes it to Tasks, Nudge or Rhythm. */
@@ -78,6 +82,46 @@ function mountBoard(view) {
     await refresh();
   }
 
+  /* Where a card or a new to-do can go: a day, Next week ("any day"), or
+     Later. key is what drafts and focus are remembered by. */
+  const dayDest = date => ({ key: date, date, label: `${DOW[D.weekday(date)]} ${short(date)}` });
+  const nextDest = board => ({ key: 'nextWeek', slot: 'nextWeek', monday: board.nextWeek.start, label: 'Next week' });
+  const LATER = { key: 'later', slot: 'later', label: 'Later' };
+
+  async function parkTo(card, dest) {
+    let r;
+    try { r = await plugin.store.park(card, dest.slot, dest.monday); }
+    catch (e) { console.error('Fortnight: move failed', e); r = { ok: false, reason: 'error' }; }
+    if (!r.ok && r.reason !== 'busy') {
+      console.warn('Fortnight: move refused', r.reason, card);
+      new Notice(`Fortnight: couldn't move "${card.text}" to ${dest.label}: ${REASON[r.reason] || 'something went wrong (see the console)'}.`);
+    }
+    /* Tagged in its own note: say where, and offer to take it back. */
+    if (r.ok && r.tagged) undoNotice(card, r);
+    await refresh();
+  }
+
+  function undoNotice(card, r) {
+    const tag = plugin.settings.laterTag || '#later';
+    const frag = document.createDocumentFragment();
+    const msg = document.createElement('span');
+    msg.textContent = `"${card.text}" is in Later — tagged ${tag} in ${card.path.replace(/\.md$/, '')}. `;
+    const undo = document.createElement('button');
+    undo.textContent = 'Undo';
+    undo.className = 'mod-cta';
+    frag.append(msg, undo);
+    const notice = new Notice(frag, 8000);
+    undo.addEventListener('click', async ev => {
+      ev.stopPropagation();
+      const back = await plugin.store.revert(card, r.after, r.before);
+      if (notice && notice.hide) notice.hide();
+      if (!back.ok) new Notice(`Fortnight: couldn't undo — the line changed in ${card.path}.`);
+      await refresh();
+    });
+  }
+
+  const sendTo = (card, dest) => (dest.date ? moveTo(card, dest.date) : parkTo(card, dest));
+
   /* The days a card can still go to: today and the days ahead on the board. */
   const openDays = board => board.days.filter(d => !d.past);
 
@@ -89,6 +133,11 @@ function mountBoard(view) {
         .setIcon('calendar')
         .setDisabled(d.date === card.date && !card.fromTray)
         .onClick(() => moveTo(card, d.date)));
+    }
+    if (card.source === 'tasks' && !card.due) {
+      menu.addSeparator();
+      menu.addItem(i => i.setTitle('Next week (any day)').setIcon('calendar-range').setDisabled(card.slot === 'nextWeek' && !card.date).onClick(() => parkTo(card, nextDest(board))));
+      menu.addItem(i => i.setTitle('Later').setIcon('inbox').setDisabled(card.slot === 'later').onClick(() => parkTo(card, LATER)));
     }
     menu.showAtMouseEvent(e);
   }
@@ -105,7 +154,7 @@ function mountBoard(view) {
     el.addEventListener('contextmenu', e => { e.preventDefault(); moveMenu(e, card, board); });
   }
 
-  function makeDropTarget(el, date) {
+  function makeDropTarget(el, dest) {
     el.addEventListener('dragover', e => {
       if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
       e.preventDefault();
@@ -118,8 +167,9 @@ function mountBoard(view) {
       const card = byKey.get(e.dataTransfer.getData(DRAG_TYPE));
       if (!card) return;
       e.preventDefault();
-      if (card.date === date && !card.fromTray) return;
-      moveTo(card, date);
+      if (dest.date && card.date === dest.date && !card.fromTray) return;
+      if (!dest.date && card.slot === dest.slot && !card.date) return;
+      sendTo(card, dest);
     });
   }
 
@@ -174,7 +224,9 @@ function mountBoard(view) {
       setIcon(from.createSpan({ cls: 'fn-ic' }), 'bell');
       from.createSpan({ text: 'Nudge' });
     } else {
-      meta.createSpan({ cls: 'fn-from', text: noteName(card.path) });
+      /* Tagged into Later from elsewhere: the folder too, so you know
+         which project it came from. */
+      meta.createSpan({ cls: 'fn-from', text: card.tagged ? card.path.replace(/\.md$/, '') : noteName(card.path) });
     }
   }
 
@@ -196,32 +248,95 @@ function mountBoard(view) {
     }
     if (day.isToday && board.slipped.length) renderSlipped(col, board);
     const card = col.createDiv({ cls: 'fn-card' });
-    makeDropTarget(col, day.date);
+    makeDropTarget(col, dayDest(day.date));
     if (!day.cards.length) {
       card.createDiv({ cls: 'fn-empty-day', text: day.done.length ? 'All done' : 'Nothing planned' });
     } else {
       const list = card.createEl('ul', { cls: 'fn-list' });
       for (const c of day.cards) renderCard(list, c, board);
     }
-    renderAdd(card, day);
+    renderAdd(card, dayDest(day.date));
     renderDone(card, day, board);
   }
 
+  /* Next week: "any day" cards, a line per day saying how much is there,
+     and a button to open it out into its seven days. */
+  function renderNextWeek(boardEl, board) {
+    const nw = board.nextWeek;
+    const col = boardEl.createDiv({ cls: ['fn-col', 'fn-next'] });
+    const head = col.createDiv({ cls: 'fn-colhead' });
+    head.createSpan({ cls: 'fn-dow', text: 'Next week' });
+    head.createSpan({ cls: 'fn-range-sm', text: `${short(nw.start)} – ${short(D.addDays(nw.start, 6))}` });
+    const card = col.createDiv({ cls: 'fn-card' });
+    makeDropTarget(col, nextDest(board));
+    card.createDiv({ cls: 'fn-subhead', text: nw.anyDay.length ? `Any day · ${nw.anyDay.length}` : 'Any day' });
+    if (nw.anyDay.length) {
+      const list = card.createEl('ul', { cls: 'fn-list' });
+      for (const c of nw.anyDay) renderCard(list, c, board);
+    }
+    if (!nextOpen) {
+      for (const d of nw.days) {
+        const row = card.createDiv({ cls: 'fn-nd' });
+        row.createSpan({ cls: 'fn-nd-dow', text: `${DOW[D.weekday(d.date)]} ${dayNum(d.date)}` });
+        const dots = row.createSpan({ cls: 'fn-nd-dots' });
+        for (const c of d.cards.slice(0, 6)) dots.createEl('i', { cls: c.source === 'event' ? 'is-event' : '' });
+        row.createSpan({ cls: 'fn-nd-n', text: d.cards.length ? String(d.cards.length) : '' });
+      }
+    }
+    renderAdd(card, nextDest(board));
+    const toggle = card.createEl('button', {
+      cls: 'fn-more', attr: { type: 'button', 'aria-expanded': String(nextOpen) },
+      text: nextOpen ? 'Hide the days' : 'Show 7 days',
+    });
+    toggle.addEventListener('click', () => { nextOpen = !nextOpen; render(lastTasks, lastRhythm); });
+    if (nextOpen) {
+      for (const d of nw.days) {
+        renderDay(boardEl, Object.assign({ past: false, isToday: false }, d), board);
+        boardEl.lastChild.addClass('is-nextweek');
+      }
+    }
+  }
+
+  /* Later: undated to-dos waiting for a week. */
+  function renderLater(boardEl, board) {
+    const col = boardEl.createDiv({ cls: ['fn-col', 'fn-later'] });
+    const head = col.createDiv({ cls: 'fn-colhead' });
+    head.createSpan({ cls: 'fn-dow', text: 'Later' });
+    if (board.later.length) head.createSpan({ cls: 'fn-range-sm', text: String(board.later.length) });
+    col.createDiv({ cls: 'fn-col-hint', text: 'Drop here to park without a date' });
+    const card = col.createDiv({ cls: 'fn-card' });
+    makeDropTarget(col, LATER);
+    const own = board.later.filter(c => !c.tagged);
+    const tagged = board.later.filter(c => c.tagged);
+    if (!board.later.length) card.createDiv({ cls: 'fn-empty-day', text: 'Nothing parked' });
+    if (own.length) {
+      if (tagged.length) card.createDiv({ cls: 'fn-subhead', text: `Planner note · ${own.length}` });
+      const list = card.createEl('ul', { cls: 'fn-list' });
+      for (const c of own) renderCard(list, c, board);
+    }
+    if (tagged.length) {
+      card.createDiv({ cls: 'fn-subhead', text: `Tagged ${plugin.settings.laterTag || '#later'} · ${tagged.length}` });
+      const list = card.createEl('ul', { cls: 'fn-list' });
+      for (const c of tagged) renderCard(list, c, board);
+    }
+    renderAdd(card, LATER);
+  }
+
   /* "+ Add a to-do": Enter writes it to the planner note with this day's ⏳. */
-  function renderAdd(card, day) {
+  function renderAdd(card, dest) {
     const row = card.createDiv({ cls: 'fn-addrow' });
     const plus = row.createSpan({ cls: 'fn-ic fn-add-ic' });
     setIcon(plus, 'plus');
     const input = row.createEl('input', {
       cls: 'fn-addinput',
-      attr: { type: 'text', placeholder: 'Add a to-do', 'aria-label': `Add a to-do on ${DOW[D.weekday(day.date)]} ${short(day.date)}`, enterkeyhint: 'done' },
+      attr: { type: 'text', placeholder: 'Add a to-do', 'aria-label': `Add a to-do: ${dest.label}`, enterkeyhint: 'done' },
     });
-    input.value = drafts.get(day.date) || '';
-    input.addEventListener('input', () => { if (input.value) drafts.set(day.date, input.value); else drafts.delete(day.date); });
-    input.addEventListener('focus', () => { addingOn = day.date; row.addClass('is-focused'); });
-    input.addEventListener('blur', () => { row.removeClass('is-focused'); window.setTimeout(() => { if (addingOn === day.date && !root.contains(document.activeElement)) addingOn = null; }, 0); });
+    input.value = drafts.get(dest.key) || '';
+    input.addEventListener('input', () => { if (input.value) drafts.set(dest.key, input.value); else drafts.delete(dest.key); });
+    input.addEventListener('focus', () => { addingOn = dest.key; row.addClass('is-focused'); });
+    input.addEventListener('blur', () => { row.removeClass('is-focused'); window.setTimeout(() => { if (addingOn === dest.key && !root.contains(document.activeElement)) addingOn = null; }, 0); });
     input.addEventListener('keydown', async e => {
-      if (e.key === 'Escape') { input.value = ''; drafts.delete(day.date); input.blur(); addingOn = null; return; }
+      if (e.key === 'Escape') { input.value = ''; drafts.delete(dest.key); input.blur(); addingOn = null; return; }
       /* keyCode 229: WebKit's Enter that only confirms an IME word. */
       if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
       e.preventDefault();
@@ -229,7 +344,7 @@ function mountBoard(view) {
       if (!text.trim() || input.disabled) return;
       input.disabled = true;
       let r;
-      try { r = await plugin.store.add({ text, date: day.date }); }
+      try { r = await plugin.store.add(dest.date ? { text, date: dest.date } : { text, slot: dest.slot, monday: dest.monday }); }
       catch (err) { console.error('Fortnight: add failed', err); r = { ok: false, reason: 'error' }; }
       if (!r.ok) {
         input.disabled = false;
@@ -237,11 +352,11 @@ function mountBoard(view) {
         return;
       }
       /* Only what was sent is cleared; anything typed since stays. */
-      if (drafts.get(day.date) === text) drafts.delete(day.date);
-      addingOn = day.date;
+      if (drafts.get(dest.key) === text) drafts.delete(dest.key);
+      addingOn = dest.key;
       await refresh();
     });
-    if (addingOn === day.date) window.setTimeout(() => { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }, 0);
+    if (addingOn === dest.key) window.setTimeout(() => { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }, 0);
   }
 
   /* What you got through: collapsed under the day, a tap to open. */
@@ -326,6 +441,8 @@ function mountBoard(view) {
     if (board.tray.length) renderTray(board);
     const boardEl = main.createDiv({ cls: 'fn-board' });
     for (const day of board.days) renderDay(boardEl, day, board);
+    renderNextWeek(boardEl, board);
+    renderLater(boardEl, board);
     boardEl.scrollLeft = scrollLeft;
   }
 

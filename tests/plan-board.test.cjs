@@ -307,4 +307,68 @@ const rhythmFixture = () => ({
   assert.deepStrictEqual(b.slipped, []);
 }
 
+/* 15. Next week: its seven days hold what is dated in it (⏳, 📅-only,
+       Nudge due, Rhythm events and planned practices); "any day" holds
+       lines parked with 🛫 on a Monday of a later week and no ⏳ */
+{
+  const data = rhythmFixture();
+  data.events = [{ name: 'Flight', date: '2026-10-06', time: '07:10', path: 'e/Flight.md' }];
+  data.log = new Map([['2026-10-08', E({ plan: ['Paint'] })]]);
+  const b = planBoard({ today: WED, settings: {}, rhythm: data, tasks: [
+    task('- [ ] Next Tue thing ⏳ 2026-10-06', 'A.md', 1),
+    task('- [ ] Tax due 📅 2026-10-09', 'A.md', 2),
+    task('- [ ] Some day next week 🛫 2026-10-05', 'A.md', 3),
+    task('- [ ] Parked further out 🛫 2026-10-19', 'A.md', 4),
+    task('- [ ] Too far ⏳ 2026-10-20', 'A.md', 5),
+    task('- [x] Done next week ⏳ 2026-10-06 ✅ 2026-09-30', 'A.md', 6),
+    { source: 'nudge', path: 'Reminders.md', line: 1, text: 'Renew licence', due: '2026-10-07', scheduled: '', time: '', done: false, priority: 'normal', raw: '' },
+  ] });
+  assert.strictEqual(b.nextWeek.start, '2026-10-05');
+  assert.deepStrictEqual(b.nextWeek.days.map(d => d.date), ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11']);
+  assert.deepStrictEqual(b.nextWeek.days.map(d => d.cards.map(c => c.text)), [[], ['Flight', 'Next Tue thing'], ['Renew licence'], ['Paint'], ['Tax due'], [], []]);
+  assert.deepStrictEqual(b.nextWeek.anyDay.map(c => c.text), ['Some day next week', 'Parked further out']);
+  assert.strictEqual(b.nextWeek.count, 7);
+  assert.strictEqual(b.nextWeek.anyDay[0].slot, 'nextWeek');
+}
+
+/* 15b. on Sunday, next week is the week after the one the board jumped to */
+assert.strictEqual(planBoard({ today: '2026-10-04', tasks: [], settings: {} }).nextWeek.start, '2026-10-12');
+
+/* 16. Later: open, undated lines from the planner note and the included
+       folders (planner note first), plus 🛫 lines whose week has come
+       without a day — never lost */
+{
+  const b = planBoard({ today: WED, settings: { plannerNote: 'Planning/Fortnight.md', laterFolders: ['Projects'] }, tasks: [
+    task('- [ ] Project idea', 'Projects/Garden.md', 2),
+    task('- [ ] Inbox thought', 'Planning/Fortnight.md', 5),
+    task('- [ ] Random undated', 'Notes/Home.md', 1),
+    task('- [ ] Parked for this week 🛫 2026-09-28', 'Notes/Home.md', 3),
+    task('- [x] Done undated', 'Planning/Fortnight.md', 6),
+    task('- [ ] Project deadline 📅 2026-10-01', 'Projects/Garden.md', 3),
+  ] });
+  assert.deepStrictEqual(b.later.map(c => c.text), ['Inbox thought', 'Parked for this week', 'Project idea']);
+  assert.strictEqual(b.later[0].slot, 'later');
+  /* the dated project line is on its day, not in Later */
+  assert.deepStrictEqual(texts(b, '2026-10-01'), ['Project deadline']);
+}
+
+/* 16b. a line tagged #later (Q36: a card parked from a note Later doesn't
+        otherwise read) shows in Later wherever it lives, marked as tagged */
+{
+  const b = planBoard({ today: WED, settings: { plannerNote: 'Planning/Fortnight.md', laterTag: '#later' }, tasks: [
+    task('- [ ] Prepare slides #later', 'Work/Projects.md', 4),
+    task('- [ ] Not tagged', 'Work/Projects.md', 5),
+    task('- [ ] Tagged but dated #later ⏳ 2026-10-01', 'Work/Projects.md', 6),
+  ] });
+  assert.deepStrictEqual(b.later.map(c => [c.text, c.tagged]), [['Prepare slides', true]]);
+  assert.deepStrictEqual(texts(b, '2026-10-01'), ['Tagged but dated']);
+}
+
+/* 16c. the planner path is read the same way the store writes it: a
+        setting without ".md" still finds the note's undated to-dos */
+{
+  const b = planBoard({ today: WED, settings: { plannerNote: './Planning/Fortnight' }, tasks: [task('- [ ] Buy paint', 'Planning/Fortnight.md', 3)] });
+  assert.deepStrictEqual(b.later.map(c => c.text), ['Buy paint']);
+}
+
 console.log('plan-board OK');

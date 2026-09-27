@@ -308,5 +308,91 @@ const rhythm = { rhythm: { settings: {} } };
     assert.strictEqual(app.files.get('Planning/Fortnight.md'), '# Theirs\n\n## Inbox\n- [ ] Mine ⏳ 2026-10-01\n');
   }
 
+  /* 14. park in Next week: 🛫 next Monday, ⏳ removed */
+  {
+    const app = makeApp({ 'H.md': '- [ ] Paint fence ⏳ 2026-10-01 🔼\n- [ ] Tidy shed 🛫 2026-10-05' });
+    const store = makeStore({ app, settings: {} });
+    assert.deepStrictEqual(await store.park({ source: 'tasks', path: 'H.md', line: 0, raw: '- [ ] Paint fence ⏳ 2026-10-01 🔼' }, 'nextWeek', '2026-10-05'), { ok: true });
+    assert.strictEqual(app.files.get('H.md'), '- [ ] Paint fence 🔼 🛫 2026-10-05\n- [ ] Tidy shed 🛫 2026-10-05');
+    /* 14b. Later: no ⏳, no 🛫 — and H.md isn't a Later source, so the
+            line is tagged #later (Q36) */
+    await store.park({ source: 'tasks', path: 'H.md', line: 1, raw: '- [ ] Tidy shed 🛫 2026-10-05' }, 'later');
+    assert.strictEqual(app.files.get('H.md'), '- [ ] Paint fence 🔼 🛫 2026-10-05\n- [ ] Tidy shed #later');
+    /* 14c. a parked card put on a day before its 🛫 loses the 🛫, so the
+            line doesn't say "not before Monday" and "on Wednesday" at once */
+    await store.move({ source: 'tasks', path: 'H.md', line: 0, raw: '- [ ] Paint fence 🔼 🛫 2026-10-05' }, '2026-10-01');
+    assert.strictEqual(app.files.get('H.md'), '- [ ] Paint fence 🔼 ⏳ 2026-10-01\n- [ ] Tidy shed #later');
+  }
+
+  /* 14d. a 🛫 on or before the new day stays */
+  {
+    const app = makeApp({ 'H.md': '- [ ] Paint fence 🛫 2026-10-05' });
+    await makeStore({ app, settings: {} }).move({ source: 'tasks', path: 'H.md', line: 0, raw: '- [ ] Paint fence 🛫 2026-10-05' }, '2026-10-07');
+    assert.strictEqual(app.files.get('H.md'), '- [ ] Paint fence 🛫 2026-10-05 ⏳ 2026-10-07');
+  }
+
+  /* 14e. reminders, practices and events need a day (for now) */
+  {
+    const store = makeStore({ app: makeApp({}), settings: {} });
+    for (const source of ['nudge', 'practice']) assert.deepStrictEqual(await store.park({ source, text: 'x', path: 'p' }, 'later'), { ok: false, reason: 'needs-day' });
+    assert.deepStrictEqual(await store.park({ source: 'event', path: 'e' }, 'nextWeek', '2026-10-05'), { ok: false, reason: 'locked' });
+  }
+
+  /* 14f. quick-add into Next week ("any day") and Later */
+  {
+    const app = makeApp({});
+    const store = makeStore({ app, settings: {} });
+    await store.add({ text: 'Plan the trip', slot: 'nextWeek', monday: '2026-10-05' });
+    await store.add({ text: 'Someday: learn Italian', slot: 'later' });
+    assert.strictEqual(app.files.get('Planning/Fortnight.md'), '# Fortnight\n\n## Inbox\n- [ ] Plan the trip 🛫 2026-10-05\n- [ ] Someday: learn Italian\n');
+  }
+
+  /* 15. Later from a note Later doesn't read: dates off, #later on (Q36);
+         back onto a day or into Next week: #later off */
+  {
+    const app = makeApp({ 'Work/Projects.md': '- [ ] Prepare slides for Friday ⏳ 2026-10-02', 'Planning/Fortnight.md': '## Inbox\n- [ ] Bread ⏳ 2026-10-02' });
+    const store = makeStore({ app, settings: { laterTag: '#later' } });
+    const r = await store.park({ source: 'tasks', path: 'Work/Projects.md', line: 0, raw: '- [ ] Prepare slides for Friday ⏳ 2026-10-02' }, 'later');
+    assert.deepStrictEqual(r, { ok: true, tagged: true, before: '- [ ] Prepare slides for Friday ⏳ 2026-10-02', after: '- [ ] Prepare slides for Friday #later' });
+    assert.strictEqual(app.files.get('Work/Projects.md'), '- [ ] Prepare slides for Friday #later');
+    /* the planner note is already a Later source: no tag */
+    await store.park({ source: 'tasks', path: 'Planning/Fortnight.md', line: 1, raw: '- [ ] Bread ⏳ 2026-10-02' }, 'later');
+    assert.strictEqual(app.files.get('Planning/Fortnight.md'), '## Inbox\n- [ ] Bread');
+    /* back onto a day */
+    await store.move({ source: 'tasks', path: 'Work/Projects.md', line: 0, raw: '- [ ] Prepare slides for Friday #later' }, '2026-10-02');
+    assert.strictEqual(app.files.get('Work/Projects.md'), '- [ ] Prepare slides for Friday ⏳ 2026-10-02');
+    /* into Later again, then Next week */
+    await store.park({ source: 'tasks', path: 'Work/Projects.md', line: 0, raw: '- [ ] Prepare slides for Friday ⏳ 2026-10-02' }, 'later');
+    await store.park({ source: 'tasks', path: 'Work/Projects.md', line: 0, raw: '- [ ] Prepare slides for Friday #later' }, 'nextWeek', '2026-10-05');
+    assert.strictEqual(app.files.get('Work/Projects.md'), '- [ ] Prepare slides for Friday 🛫 2026-10-05');
+  }
+
+  /* 15b. a line in an included Later folder isn't tagged */
+  {
+    const app = makeApp({ 'Projects/G.md': '- [ ] Dig ⏳ 2026-10-02' });
+    await makeStore({ app, settings: { laterFolders: ['Projects'] } }).park({ source: 'tasks', path: 'Projects/G.md', line: 0, raw: '- [ ] Dig ⏳ 2026-10-02' }, 'later');
+    assert.strictEqual(app.files.get('Projects/G.md'), '- [ ] Dig');
+  }
+
+  /* 15c. undo puts back exactly the line that was there, if it's unchanged */
+  {
+    const app = makeApp({ 'W.md': '- [ ] Slides #later' });
+    const store = makeStore({ app, settings: {} });
+    assert.deepStrictEqual(await store.revert({ path: 'W.md', line: 0 }, '- [ ] Slides #later', '- [ ] Slides ⏳ 2026-10-02'), { ok: true });
+    assert.strictEqual(app.files.get('W.md'), '- [ ] Slides ⏳ 2026-10-02');
+    assert.deepStrictEqual(await store.revert({ path: 'W.md', line: 0 }, '- [ ] Slides #later', 'x'), { ok: false, reason: 'changed' });
+  }
+
+  /* 15d. a card with a 📅 deadline can't be parked: 📅 is never touched,
+          so it would stay on its due day while we claimed otherwise */
+  {
+    const app = makeApp({ 'Home.md': '- [ ] File tax ⏳ 2026-10-01 📅 2026-10-02' });
+    const store = makeStore({ app, settings: {} });
+    const card = { source: 'tasks', path: 'Home.md', line: 0, raw: '- [ ] File tax ⏳ 2026-10-01 📅 2026-10-02', due: '2026-10-02' };
+    assert.deepStrictEqual(await store.park(card, 'later'), { ok: false, reason: 'has-deadline' });
+    assert.deepStrictEqual(await store.park(card, 'nextWeek', '2026-10-05'), { ok: false, reason: 'has-deadline' });
+    assert.strictEqual(app.files.get('Home.md'), '- [ ] File tax ⏳ 2026-10-01 📅 2026-10-02');
+  }
+
   console.log('store-write OK');
 })().catch(e => { console.error(e); process.exit(1); });

@@ -36,6 +36,8 @@ const files = q.get('empty') === '1' ? {} : {
     `- [ ] Book the vet ⏳ ${d(-6)}`,
   ].join('\n'),
   'Templates/Daily.md': `- [ ] Template placeholder ⏳ ${d(0)}`,
+  'Planning/Fortnight.md': ['# Fortnight', '', '## Inbox', '- [ ] Learn to make bread', '- [ ] Sort the photo albums', `- [ ] Plan the holiday 🛫 ${D.addDays(D.weekStart(d(1)), 7)}`, ''].join('\n'),
+  'Work/Later.md': `- [ ] Draft next quarter's goals ⏳ ${D.addDays(D.weekStart(d(1)), 9)}`,
   'Rhythm/Areas/Body.md': '---\nrhythm: area\norder: 1\n---\n',
   'Rhythm/Areas/Craft.md': '---\nrhythm: area\norder: 2\n---\n',
   'Rhythm/Practices/Gym.md': '---\nrhythm: practice\narea: Body\ncadence: 3/week\n---\n',

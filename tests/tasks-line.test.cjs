@@ -175,4 +175,27 @@ assert.throws(() => L.setStatus('- [ ] X', ''), /status/);
 assert.throws(() => L.setStatus('- [ ] X', 'xx'), /status/);
 assert.throws(() => L.setStatus('- [ ] X', ']'), /status/);
 
+/* 14. addTag puts a tag at the end of the description — before the Tasks
+       fields, so Tasks still reads them — and never twice */
+assert.strictEqual(L.addTag('- [ ] Prepare slides', '#later'), '- [ ] Prepare slides #later');
+assert.strictEqual(L.addTag('- [ ] File tax 📅 2026-10-20', '#later'), '- [ ] File tax #later 📅 2026-10-20');
+assert.strictEqual(L.addTag('  - [ ] Paint #home 📅 2026-10-20 ^abc', '#later'), '  - [ ] Paint #later #home 📅 2026-10-20 ^abc');
+assert.strictEqual(L.addTag('- [ ] Already #Later here', '#later'), '- [ ] Already #Later here');
+assert.strictEqual(L.addTag('- [ ] X\r', '#later'), '- [ ] X #later\r');
+assert.strictEqual(L.parseTask(L.addTag('- [ ] File tax 📅 2026-10-20', '#later')).due, '2026-10-20');
+
+/* 15. removeTag takes the tag and one space before it, wherever it is,
+       matching whole tags only (case-insensitive) */
+assert.strictEqual(L.removeTag('- [ ] Prepare slides #later', '#later'), '- [ ] Prepare slides');
+assert.strictEqual(L.removeTag('- [ ] File tax #Later 📅 2026-10-20', '#later'), '- [ ] File tax 📅 2026-10-20');
+assert.strictEqual(L.removeTag('- [ ] Keep #laterish and #later/sub', '#later'), '- [ ] Keep #laterish and #later/sub');
+assert.strictEqual(L.removeTag('- [ ] No tag', '#later'), '- [ ] No tag');
+assert.strictEqual(L.hasTag('- [ ] X #LATER', '#later'), true);
+assert.strictEqual(L.hasTag('- [ ] X #laterish', '#later'), false);
+
+/* 16. every copy of the tag goes; "#later," is the tag, as Obsidian reads it */
+assert.strictEqual(L.removeTag('- [ ] Read #later #later', '#later'), '- [ ] Read');
+assert.strictEqual(L.hasTag('- [ ] Read #later, then write', '#later'), true);
+assert.strictEqual(L.removeTag('- [ ] Read #later, then write', '#later'), '- [ ] Read, then write');
+
 console.log('tasks-line OK');

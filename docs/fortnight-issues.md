@@ -118,7 +118,7 @@ Ruan's own plugins come first. Nudge and Rhythm cards now appear straight after 
   - Out: sorting slipped cards (#13, #14).
   - Blocked by: #3
 
-- [ ] **#7 Next week bucket and Later pile**
+- [x] **#7 Next week bucket and Later pile** — done 27 Sep 2026; Q36 option A: a card parked in Later from another note gets #later (with Undo); cards with a 📅 deadline can't be parked
   - AC:
     - Dropping a card on Next week sets 🛫 to next Monday and removes ⏳.
     - Dropping on Later removes both.

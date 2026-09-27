@@ -323,6 +323,28 @@
 .fortnight input.fn-addinput:focus { box-shadow: none; outline: none; }
 .fortnight input.fn-addinput::placeholder { color: var(--fn-muted); }
 
+/* Next week and Later */
+.fortnight .fn-col.fn-next { width: 232px; }
+.fortnight .fn-col.fn-later { width: 244px; }
+.fortnight .fn-col.fn-next { margin-left: 12px; }
+.fortnight .fn-range-sm { margin-left: auto; font-size: 12px; color: var(--fn-muted); font-feature-settings: "tnum" 1; }
+.fortnight .fn-subhead {
+  padding: 10px 12px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--fn-muted);
+}
+.fortnight .fn-nd { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; font-size: 13px; }
+.fortnight .fn-nd-dow { width: 52px; white-space: nowrap; color: var(--fn-muted); font-feature-settings: "tnum" 1; }
+.fortnight .fn-nd-dots { flex: 1 1 auto; display: flex; gap: 3px; }
+.fortnight .fn-nd-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--fn-accent); opacity: .75; }
+.fortnight .fn-nd-dots i.is-event { background: transparent; box-shadow: inset 0 0 0 1.5px var(--fn-accent); border-radius: 2px; opacity: 1; }
+.fortnight .fn-nd-n { color: var(--fn-muted); font-feature-settings: "tnum" 1; }
+.fortnight .fn-col.is-nextweek .fn-dow { color: var(--fn-muted); }
+.fortnight .fn-col-hint { margin: -4px 8px 6px; font-size: 12px; color: var(--fn-muted); }
+
 .fortnight .fn-card {
   background: var(--fn-surface);
   border-radius: 11px;

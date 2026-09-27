@@ -11,6 +11,11 @@ const DEFAULT_SETTINGS = {
   weekStart: 1,
   /* Folders whose to-dos never appear, e.g. templates or an archive. */
   excludeFolders: [],
+  /* Undated to-dos shown in Later: always the planner note's, plus these
+     folders' (none by default — most vaults hold many undated checkboxes). */
+  laterFolders: [],
+  /* The tag that keeps a to-do from any other note in Later (Q36). */
+  laterTag: '#later',
   /* Where new to-dos from quick-add go, under an "## Inbox" heading. */
   plannerNote: 'Planning/Fortnight.md',
   /* The daily welcome: greeting (with a name, if set), then "Plan the week"

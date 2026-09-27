@@ -5,6 +5,7 @@
 
 const { parseFrontmatter, patchFrontmatter, buildNote } = require('./rhythm/markdown');
 const L = require('./tasks-line');
+const { plannerPathOf } = require('./plan');
 const RD = require('./rhythm/dates');
 
 const NUDGE_ID = 'nudge-reminders';
@@ -194,22 +195,18 @@ function makeStore(plugin) {
   /* The planner note's path, tidied: one kind of slash, no "./" or leading
      "/", and ".md" added — a path without it would create a file Obsidian
      never lists as a note, so added to-dos would never show. */
-  function plannerPath() {
-    let p = String(plugin.settings.plannerNote || 'Planning/Fortnight.md').trim()
-      .replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^(\.\/|\/)+/, '');
-    if (!p || p.endsWith('/')) p += 'Fortnight.md';
-    return /\.md$/i.test(p) ? p : `${p}.md`;
-  }
+  const plannerPath = () => plannerPathOf(plugin.settings);
 
   /* Quick-add: a new Tasks line with the column's day as its ⏳, written at
      the end of the planner note's "## Inbox" section (made if missing).
      What was typed is kept, Tasks fields and all; only ⏳ is set, and a
      typed checkbox isn't doubled. Every other line keeps its own ending,
      and "#" lines inside code fences are not headings. */
-  async function add({ text, date }) {
+  async function add({ text, date, slot, monday }) {
     const clean = String(text || '').replace(/\s+/g, ' ').trim().replace(/^(?:[-*+] +)?\[.\] */, '');
     if (!clean) return { ok: false, reason: 'empty' };
-    const line = L.setField(`- [ ] ${clean}`, 'scheduled', date);
+    const base = `- [ ] ${clean}`;
+    const line = slot === 'nextWeek' || slot === 'later' ? parked(base, slot, monday, plannerPath()) : onDay(base, date);
     const path = plannerPath();
     const insert = textNow => {
       const lines = textNow.split('\n');
@@ -266,13 +263,68 @@ function makeStore(plugin) {
     return (Array.isArray(fm.done) ? fm.done : (fm.done ? [fm.done] : [])).map(String).includes(name);
   }
 
+  const laterTag = () => plugin.settings.laterTag || '#later';
+  /* Notes Later reads without a tag: the planner note and chosen folders. */
+  function isLaterSource(path) {
+    if (path === plannerPath()) return true;
+    return (plugin.settings.laterFolders || []).some(f => {
+      const dir = String(f).replace(/^\/+|\/+$/g, '');
+      return dir && path.startsWith(dir + '/');
+    });
+  }
+
+  /* A Tasks line put on a day: its ⏳ set, any #later taken off; a 🛫
+     ("not before") later than that day is dropped, so the line doesn't
+     contradict itself. */
+  function onDay(raw, date) {
+    const next = L.setField(L.removeTag(raw, laterTag()), 'scheduled', date);
+    const t = L.parseTask(next);
+    return t && t.start && t.start > date ? L.setField(next, 'start', null) : next;
+  }
+
+  /* A Tasks line parked without a day: Next week is 🛫 its Monday (Tasks'
+     own "not before"); Later is neither ⏳ nor 🛫 — and, in a note Later
+     doesn't otherwise read, a #later tag so it stays on the board (Q36).
+     📅 is never touched. */
+  function parked(raw, where, monday, path) {
+    const bare = L.setField(L.removeTag(raw, laterTag()), 'scheduled', null);
+    if (where === 'nextWeek') return L.setField(bare, 'start', monday);
+    const undated = L.setField(bare, 'start', null);
+    return isLaterSource(path) ? undated : L.addTag(undated, laterTag());
+  }
+
+  function park(card, where, monday) { return once(card, () => parkNow(card, where, monday)); }
+  async function parkNow(card, where, monday) {
+    if (card.source === 'event') return { ok: false, reason: 'locked' };
+    /* Reminders and practices need a day for now (#11, #12). */
+    if (card.source !== 'tasks') return { ok: false, reason: 'needs-day' };
+    /* A 📅 deadline is never touched and keeps the card on its due day, so
+       parking it would change the note and claim a move that didn't happen. */
+    const t = L.parseTask(card.raw);
+    if (t && t.due) return { ok: false, reason: 'has-deadline' };
+    let after = null;
+    const r = await editLine(card, raw => (after = parked(raw, where, monday, card.path)));
+    /* Tagged: say so, with what it was, so the board can offer Undo. */
+    if (r.ok && where === 'later' && after && L.hasTag(after, laterTag()) && !L.hasTag(card.raw, laterTag())) {
+      const cr = card.raw.endsWith('\r') ? '\r' : '';
+      return { ok: true, tagged: true, before: card.raw, after: after + cr };
+    }
+    return r;
+  }
+
+  /* Undo: put back the line that was there, if it still reads as we left
+     it. editLine keeps the line's own \r. */
+  function revert(card, now, before) {
+    return editLine({ path: card.path, line: card.line, raw: now }, () => before.replace(/\r$/, ''));
+  }
+
   /* Put a card on another day. Each kind moves the way its owner moves it:
      a Tasks line by its ⏳ alone (📅 is never touched), a reminder through
      Nudge, a practice by its promise in Rhythm's log. Events are fixed. */
   function move(card, date) { return once(card, () => moveNow(card, date)); }
   async function moveNow(card, date) {
     if (card.source === 'event') return { ok: false, reason: 'locked' };
-    if (card.source === 'tasks') return editLine(card, raw => L.setField(raw, 'scheduled', date));
+    if (card.source === 'tasks') return editLine(card, raw => onDay(raw, date));
     if (card.source === 'nudge') {
       const ours = nudge();
       if (!ours || typeof ours.setDue !== 'function') return { ok: false, reason: 'no-nudge' };
@@ -325,7 +377,7 @@ function makeStore(plugin) {
     return { ok: false, reason: 'unknown' };
   }
 
-  return { load, loadRhythm, move, tick, add, plannerPath, problems: () => problems.slice() };
+  return { load, loadRhythm, move, park, revert, tick, add, plannerPath, problems: () => problems.slice() };
 }
 
 module.exports = { makeStore };
