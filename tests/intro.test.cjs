@@ -41,6 +41,10 @@ assert.strictEqual(introScreens(board({ today: '2026-09-30' }), at('2026-09-30',
     ],
   });
   assert.strictEqual(introScreens(b, at('2026-09-27', 8), {}).plan.summary, '2 slipped · 2 practices to place · 2 reminders this week');
+  /* the same, as separate figures for the big-number layout */
+  assert.deepStrictEqual(introScreens(b, at('2026-09-27', 8), {}).plan.stats, [
+    { n: 2, label: 'slipped', slip: true }, { n: 2, label: 'practices to place', slip: false }, { n: 2, label: 'reminders this week', slip: false },
+  ]);
   const one = board({ slipped: [card('tasks')], tray: [{ name: 'Gym', need: 1 }], days: [{ date: '2026-09-28', past: false, cards: [card('nudge')] }] });
   assert.strictEqual(introScreens(one, at('2026-09-27', 8), {}).plan.summary, '1 slipped · 1 practice to place · 1 reminder this week');
 }
@@ -56,10 +60,16 @@ assert.strictEqual(introScreens(board({ today: '2026-09-30' }), at('2026-09-30',
     ],
   });
   assert.strictEqual(introScreens(b, at('2026-09-30', 8), {}).plan.summary, '4 things today · 1 slipped');
+  assert.deepStrictEqual(introScreens(b, at('2026-09-30', 8), {}).plan.stats, [
+    { n: 4, label: 'things today', slip: false }, { n: 1, label: 'slipped', slip: true },
+  ]);
 }
 
 /* 5. nothing waiting */
 assert.strictEqual(introScreens(board({ today: '2026-09-30' }), at('2026-09-30', 8), {}).plan.summary, 'Nothing waiting — a clean slate.');
+assert.deepStrictEqual(introScreens(board({ today: '2026-09-30' }), at('2026-09-30', 8), {}).plan.stats, []);
+/* the welcome's big numeral is today's day of the month */
+assert.strictEqual(introScreens(board(), at('2026-09-27', 8), {}).welcome.day, '27');
 
 /* 6. once a day, and never when switched off */
 assert.strictEqual(shouldShowIntro({ showWelcome: true, lastWelcome: '' }, '2026-09-27'), true);

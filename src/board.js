@@ -179,13 +179,12 @@ function mountBoard(view) {
        button. Events are fixed, done cards are done. */
     if (card.source !== 'event' && !card.done) {
       const tick = li.createEl('button', { cls: 'fn-tick', attr: { type: 'button', 'aria-label': `Mark "${card.text}" done` } });
-      setIcon(tick, 'circle');
+      tick.createSpan({ cls: 'fn-ring' });
       tick.addEventListener('click', e => {
         e.stopPropagation();
         if (tick.disabled) return;
         tick.disabled = true;
         tick.addClass('is-ticking');
-        setIcon(tick, 'check-circle-2');
         tickCard(card);
       });
     }
@@ -195,7 +194,7 @@ function mountBoard(view) {
     if (!card.done) makeDraggable(row, card, board);
     if (card.source === 'event') {
       /* A fixed appointment: time in front, a lock — it can't be dragged. */
-      row.createSpan({ cls: 'fn-evtime', text: card.time || 'All day' });
+      row.createSpan({ cls: card.time ? 'fn-evtime' : ['fn-evtime', 'is-allday'], text: card.time || 'All day' });
     }
     const body = row.createDiv({ cls: 'fn-body' });
     body.createSpan({ cls: 'fn-title', text: card.text || '(untitled)' });
@@ -213,7 +212,7 @@ function mountBoard(view) {
          that is due later says when. */
       const text = card.deadlineOnly ? 'Deadline'
         : card.due === board.today ? 'Due today' : `Due ${DOW[D.weekday(card.due)]} ${dayNum(card.due)}`;
-      meta.createSpan({ cls: card.due <= board.today ? ['fn-due', 'is-now'] : 'fn-due', text });
+      meta.createSpan({ cls: ['fn-due', card.due <= board.today ? 'is-now' : '', card.deadlineOnly ? 'is-deadline' : ''], text });
     }
     if (card.source === 'event' || card.source === 'practice') {
       const from = meta.createSpan({ cls: 'fn-from fn-rhythm' });
@@ -233,18 +232,34 @@ function mountBoard(view) {
   function renderDay(boardEl, day, board) {
     const lead = day.date < board.weekStart && !day.past;
     const col = boardEl.createDiv({ cls: 'fn-col' + (day.isToday ? ' is-today' : '') + (day.past ? ' is-past' : '') + (lead ? ' is-lead' : '') });
-    const head = col.createDiv({ cls: 'fn-colhead' });
-    head.createSpan({ cls: 'fn-dow', text: DOW[D.weekday(day.date)] });
-    head.createSpan({ cls: 'fn-date', text: dayNum(day.date) });
-    if (day.dailyCount && !day.past) {
-      const daily = head.createSpan({ cls: 'fn-daily', attr: { title: `${day.dailyCount} daily practices in Rhythm` } });
+    const dailyBadge = parent => {
+      if (!day.dailyCount) return;
+      const daily = parent.createSpan({ cls: 'fn-daily', attr: { title: `${day.dailyCount} daily practices in Rhythm` } });
       setIcon(daily.createSpan({ cls: 'fn-ic' }), 'sun');
       daily.createSpan({ text: `${day.dailyCount} daily` });
-    }
+    };
     if (day.past) {
-      /* What was left open here has moved up into Slipped. */
-      col.createDiv({ cls: 'fn-pastcard', attr: { title: short(day.date) } });
+      /* A day gone by: a thin numeral. What was left open has moved up
+         into Slipped. */
+      col.createSpan({ cls: 'fn-pastnum', text: dayNum(day.date) });
+      col.createSpan({ cls: 'fn-pastdow', text: DOW[D.weekday(day.date)] });
+      if (day.done.length) col.createSpan({ cls: 'fn-pastdone', text: `${day.done.length} done` });
       return;
+    }
+    /* Hairline: the date's numeral carries the column — today's large and
+       in the accent colour. */
+    const head = col.createDiv({ cls: day.isToday ? ['fn-head', 'is-today'] : 'fn-head' });
+    if (day.isToday) {
+      head.createSpan({ cls: 'fn-bignum', text: dayNum(day.date) });
+      const labels = head.createDiv({ cls: 'fn-todaylabels' });
+      labels.createEl('strong', { text: 'Today' });
+      labels.createSpan({ text: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][D.weekday(day.date)] });
+      dailyBadge(labels);
+    } else {
+      head.createSpan({ cls: 'fn-num', text: dayNum(day.date) });
+      const line = head.createDiv({ cls: 'fn-dowline' });
+      line.createSpan({ text: DOW[D.weekday(day.date)] });
+      dailyBadge(line);
     }
     if (day.isToday && board.slipped.length) renderSlipped(col, board);
     const card = col.createDiv({ cls: 'fn-card' });
@@ -264,9 +279,9 @@ function mountBoard(view) {
   function renderNextWeek(boardEl, board) {
     const nw = board.nextWeek;
     const col = boardEl.createDiv({ cls: ['fn-col', 'fn-next'] });
-    const head = col.createDiv({ cls: 'fn-colhead' });
-    head.createSpan({ cls: 'fn-dow', text: 'Next week' });
-    head.createSpan({ cls: 'fn-range-sm', text: `${short(nw.start)} – ${short(D.addDays(nw.start, 6))}` });
+    const head = col.createDiv({ cls: 'fn-head' });
+    head.createSpan({ cls: 'fn-coltitle', text: 'Next week' });
+    head.createDiv({ cls: 'fn-dowline', text: `${short(nw.start)} – ${short(D.addDays(nw.start, 6))}` });
     const card = col.createDiv({ cls: 'fn-card' });
     makeDropTarget(col, nextDest(board));
     card.createDiv({ cls: 'fn-subhead', text: nw.anyDay.length ? `Any day · ${nw.anyDay.length}` : 'Any day' });
@@ -300,10 +315,9 @@ function mountBoard(view) {
   /* Later: undated to-dos waiting for a week. */
   function renderLater(boardEl, board) {
     const col = boardEl.createDiv({ cls: ['fn-col', 'fn-later'] });
-    const head = col.createDiv({ cls: 'fn-colhead' });
-    head.createSpan({ cls: 'fn-dow', text: 'Later' });
-    if (board.later.length) head.createSpan({ cls: 'fn-range-sm', text: String(board.later.length) });
-    col.createDiv({ cls: 'fn-col-hint', text: 'Drop here to park without a date' });
+    const head = col.createDiv({ cls: 'fn-head' });
+    head.createSpan({ cls: 'fn-coltitle', text: 'Later' });
+    head.createDiv({ cls: 'fn-dowline', text: board.later.length ? `${board.later.length} parked · no date` : 'Drop here to park without a date' });
     const card = col.createDiv({ cls: 'fn-card' });
     makeDropTarget(col, LATER);
     const own = board.later.filter(c => !c.tagged);
@@ -398,19 +412,17 @@ function mountBoard(view) {
         if (again) again.focus();
       });
     }
-    col.createDiv({ cls: 'fn-gh', text: 'Today' });
   }
 
   /* Weekly practices still looking for a day, per Rhythm. */
-  function renderTray(board) {
-    const tray = main.createDiv({ cls: 'fn-tray' });
-    tray.createDiv({ cls: 'fn-gh', text: 'Practices owed' });
-    const card = tray.createDiv({ cls: 'fn-tray-card' });
+  function renderTray(top, board) {
+    const card = top.createDiv({ cls: 'fn-tray' });
+    card.createSpan({ cls: 'fn-traylabel', text: 'Practices owed' });
     for (const t of board.tray) {
       const chip = card.createEl('button', {
         cls: 'fn-chip', attr: { type: 'button', title: `Open ${t.name} in Rhythm` },
       });
-      setIcon(chip.createSpan({ cls: 'fn-ic' }), 'repeat');
+      chip.createSpan({ cls: 'fn-grip', attr: { 'aria-hidden': 'true' } });
       chip.createSpan({ text: t.name });
       chip.createSpan({ cls: 'fn-chip-n', text: t.target > 1 ? `${t.need} of ${t.target} left` : 'to place' });
       chip.addEventListener('click', () => plugin.openTask({ path: t.path, line: 0 }));
@@ -433,12 +445,14 @@ function mountBoard(view) {
     const scrollLeft = prev ? prev.scrollLeft : 0;
     main.empty();
     const top = main.createDiv({ cls: 'fn-top' });
-    top.createSpan({ cls: 'fn-range', text: `${short(board.weekStart)} – ${short(D.addDays(board.weekStart, 6))}` });
+    const title = top.createDiv({ cls: 'fn-titlebox' });
+    title.createDiv({ cls: 'fn-kicker', text: board.weekStart > board.today ? 'Today, then the week' : 'This week' });
+    title.createDiv({ cls: 'fn-range', text: `${short(board.weekStart)} – ${short(D.addDays(board.weekStart, 6))}` });
     /* Installed but unreadable: say so quietly, once, above the board. */
     if (plugin.store.problems().includes('nudge')) {
       top.createSpan({ cls: 'fn-problem', text: 'Nudge reminders could not be read — they are missing from this board.' });
     }
-    if (board.tray.length) renderTray(board);
+    if (board.tray.length) renderTray(top, board);
     const boardEl = main.createDiv({ cls: 'fn-board' });
     for (const day of board.days) renderDay(boardEl, day, board);
     renderNextWeek(boardEl, board);
@@ -464,8 +478,8 @@ function mountBoard(view) {
 
   /* The daily welcome: greeting → "Plan the week" / "Plan today" → the
      board, each fading into the next. A tap moves on at once. */
-  const WELCOME_MS = 1200;
-  const PLAN_MS = 2200;
+  const WELCOME_MS = 1900;
+  const PLAN_MS = 2800;
   const FADE_MS = 450;
 
   function showIntro() {
@@ -479,12 +493,24 @@ function mountBoard(view) {
     /* Cover what is on screen, even on a board scrolled down. */
     el.style.top = `${root.scrollTop}px`;
     el.style.height = `${root.clientHeight}px`;
-    const one = el.createDiv({ cls: 'fn-intro-screen' });
-    one.createDiv({ cls: 'fn-intro-title', text: screens.welcome.title });
-    one.createDiv({ cls: 'fn-intro-sub', text: screens.welcome.sub });
-    const two = el.createDiv({ cls: 'fn-intro-screen' });
-    two.createDiv({ cls: 'fn-intro-title', text: screens.plan.title });
-    const summary = two.createDiv({ cls: 'fn-intro-sub', text: screens.plan.summary });
+    const one = el.createDiv({ cls: ['fn-intro-screen', 'is-welcome'] });
+    one.createSpan({ cls: 'fn-intro-num', text: screens.welcome.day });
+    const words = one.createDiv({ cls: 'fn-intro-words' });
+    words.createDiv({ cls: 'fn-intro-title', text: screens.welcome.title });
+    words.createDiv({ cls: 'fn-intro-sub', text: screens.welcome.sub });
+    const two = el.createDiv({ cls: ['fn-intro-screen', 'is-plan'] });
+    two.createDiv({ cls: ['fn-intro-title', 'is-big'], text: screens.plan.title });
+    const figures = two.createDiv({ cls: 'fn-stats' });
+    const drawStats = plan => {
+      figures.empty();
+      if (!plan.stats.length) { figures.createDiv({ cls: 'fn-intro-sub', text: plan.summary }); return; }
+      for (const x of plan.stats) {
+        const f = figures.createDiv({ cls: x.slip ? ['fn-stat', 'is-slip'] : 'fn-stat' });
+        f.createSpan({ cls: 'fn-snum', text: String(x.n) });
+        f.createSpan({ cls: 'fn-slabel', text: x.label });
+      }
+    };
+    drawStats(screens.plan);
     el.createDiv({ cls: 'fn-intro-hint', text: 'Tap to skip' });
 
     /* One stage counter that only moves forward: 0 greeting, 1 plan,
@@ -517,7 +543,7 @@ function mountBoard(view) {
       finish,
       /* The board may finish loading after the welcome appears (at startup,
          before the vault is indexed): keep the summary true to it. */
-      update(board) { summary.setText(introScreens(board, nowAt, plugin.settings).plan.summary); },
+      update(board) { drawStats(introScreens(board, nowAt, plugin.settings).plan); },
     };
     el.focus();
     /* Next frame, so the greeting fades in rather than appearing. */

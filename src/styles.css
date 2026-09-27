@@ -1,401 +1,272 @@
 /* Fortnight — root styles.css is BUILD OUTPUT copied from src/styles.css.
    Everything is scoped under .fortnight so the plugin never restyles Obsidian.
 
-   Look: variant A "Grouped" (design/mockups.html). Colours come from the
-   Obsidian theme, falling back to Rhythm's Apple values. The view sets its
-   own ground so white-on-grey cards read the same on any theme.
-   iOS 15 floor: no color-mix(), no :has(), no container queries — tints are
-   hsla(var(--color-accent-hsl), a). */
+   Look: "Hairline" (design/directions-2026.html, direction 1) on the soft
+   gradient ground from "Tactile". The dates carry the page: thin numerals,
+   one plain surface, hairline rules, one accent — on today's numeral.
+
+   Readability rules that keep thin type honest:
+   - weights 300 and lighter only at 20px and up, always in full-strength ink;
+   - dark mode goes one weight heavier (thin light-on-dark reads thinner);
+   - the accent is never used for small text (a theme's accent can be pale);
+   - the "slipped" orange is a fixed pair that passes AA on paper in both
+     themes, not the theme's --color-orange (#ec7500 is 2.9:1 on white).
+
+   iOS 15 floor: no color-mix(), :has(), container queries or `inset`;
+   tints are hsla(var(--color-accent-hsl), a). */
 
 .fortnight {
-  --fn-ground: #f2f2f7;
-  --fn-surface: var(--background-primary, #ffffff);
-  --fn-accent: var(--interactive-accent, #386382);
-  --fn-accent-text: var(--text-accent, #386382);
-  --fn-accent-line: hsla(var(--color-accent-hsl, 205, 40%, 36%), .55);
-  --fn-orange: var(--color-orange, #a84f00);
-  --fn-hair: var(--background-modifier-border, rgba(60, 60, 67, .29));
-  --fn-muted: var(--text-muted, rgba(60, 60, 67, .76));
-  background: var(--fn-ground);
-  font-family: var(--font-interface, -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif);
+  --fn-paper: var(--background-primary, #ffffff);
+  --fn-ink: var(--text-normal, #15171c);
+  --fn-muted: var(--text-muted, #585e6a);
+  --fn-hair: var(--background-modifier-border, rgba(21, 23, 28, .13));
+  --fn-hover: var(--background-modifier-hover, rgba(21, 23, 28, .045));
+  --fn-accent: var(--interactive-accent, #3350c4);
+  --fn-hsl: var(--color-accent-hsl, 228, 58%, 48%);
+  --fn-orgb: var(--color-orange-rgb, 214, 104, 16);
+  --fn-slip: #a0460a;
+  --fn-slip-rule: rgba(var(--fn-orgb), .55);
+  --fn-ring: rgba(21, 23, 28, .5);
+  --fn-thin-0: 100;
+  --fn-thin: 200;
+  --fn-thin-2: 300;
+  --fn-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", "Helvetica Neue", Inter, sans-serif;
+  position: relative;
   padding: 0 !important;
+  color: var(--fn-ink);
+  font-family: var(--font-interface, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, sans-serif);
+  font-size: 15px;
+  line-height: 20px;
+  /* The Tactile ground: paper with two soft washes — the accent from the
+     top-left, a warm tint from the bottom-right. */
+  background-color: var(--fn-paper);
+  background-image:
+    radial-gradient(60% 45% at 6% 0%, hsla(var(--fn-hsl), .16), hsla(var(--fn-hsl), 0) 70%),
+    radial-gradient(55% 45% at 100% 100%, rgba(var(--fn-orgb), .10), rgba(var(--fn-orgb), 0) 70%);
+  background-attachment: local;
 }
 .theme-dark .fortnight {
-  --fn-ground: #000000;
-  --fn-surface: var(--background-primary, #1c1c1e);
+  --fn-paper: var(--background-primary, #191a1d);
+  --fn-ink: var(--text-normal, #eef0f4);
+  --fn-muted: var(--text-muted, #a3a9b5);
+  --fn-hair: var(--background-modifier-border, rgba(238, 240, 244, .13));
+  --fn-hover: var(--background-modifier-hover, rgba(238, 240, 244, .06));
+  --fn-accent: var(--interactive-accent, #8fa4ff);
+  --fn-hsl: var(--color-accent-hsl, 228, 100%, 78%);
+  --fn-orgb: var(--color-orange-rgb, 255, 173, 102);
+  --fn-slip: #ffad66;
+  --fn-slip-rule: rgba(var(--fn-orgb), .5);
+  --fn-ring: rgba(238, 240, 244, .5);
+  --fn-thin-0: 200;
+  --fn-thin: 300;
+  --fn-thin-2: 400;
 }
 
-/* The daily welcome, lying over the board */
-.fortnight { position: relative; }
-.fortnight .fn-intro {
-  position: absolute;
-  top: 0; right: 0; left: 0;
-  height: 100%;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: var(--fn-ground);
-  cursor: pointer;
-  opacity: 1;
-  transition: opacity .45s ease;
-}
-.fortnight .fn-intro.is-out { opacity: 0; pointer-events: none; }
-.fortnight .fn-intro:focus { outline: none; }
-.fortnight .fn-intro-screen {
-  position: absolute;
-  max-width: 520px;
-  padding: 0 16px;
-  text-align: center;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity .45s ease, transform .45s ease;
-}
-.fortnight .fn-intro-screen.is-in { opacity: 1; transform: none; }
-.fortnight .fn-intro-title {
-  font-size: 34px;
-  line-height: 40px;
-  font-weight: 700;
-  letter-spacing: -.6px;
-  color: var(--text-normal);
-}
-.fortnight .fn-intro-sub {
-  margin-top: 8px;
-  font-size: 17px;
-  line-height: 24px;
-  color: var(--fn-muted);
-}
-.fortnight .fn-intro-hint {
-  position: absolute;
-  bottom: 24px;
-  font-size: 12px;
-  color: var(--text-faint, rgba(60, 60, 67, .46));
-}
-@media (prefers-reduced-motion: reduce) {
-  .fortnight .fn-intro,
-  .fortnight .fn-intro-screen { transition: none; transform: none; }
-}
+.fortnight button { font: inherit; color: inherit; }
+.fortnight .fn-ic { display: inline-flex; }
+.fortnight .fn-ic svg { width: 12px; height: 12px; }
 
+/* ---- header: kicker, thin range, tray ---------------------------------- */
 .fortnight .fn-top {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 20px 0;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 48px;
+  padding: 28px 32px 24px;
+}
+.fortnight .fn-kicker { font-size: 13px; font-weight: 500; color: var(--fn-muted); margin-bottom: 2px; }
+.fortnight .fn-range {
+  font: var(--fn-thin) 34px/40px var(--fn-display);
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
 }
 .fortnight .fn-problem { font-size: 12px; color: var(--fn-muted); }
-.fortnight .fn-range {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--fn-muted);
-}
-
-/* board */
-.fortnight .fn-board {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 20px 32px;
-  overflow-x: auto;
-}
-.fortnight .fn-col { flex: none; width: 216px; }
-.fortnight .fn-col.is-today { width: 272px; }
-.fortnight .fn-col.is-past { width: 50px; }
-/* Sunday: today stands apart in front of the week ahead. */
-.fortnight .fn-col.is-lead { margin-right: 12px; padding-right: 24px; border-right: .5px solid var(--fn-hair); }
-
-.fortnight .fn-colhead {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 8px 7px;
-}
-.fortnight .fn-dow {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--fn-muted);
-}
-.fortnight .fn-date {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -.3px;
-  font-feature-settings: "tnum" 1;
-  color: var(--text-normal);
-}
-.fortnight .is-today .fn-dow { color: var(--fn-accent-text); }
-.fortnight .is-today .fn-date {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 30px;
-  height: 30px;
-  padding: 0 6px;
-  border-radius: 100px;
-  background: var(--fn-accent);
-  color: var(--text-on-accent, #ffffff);
-  font-size: 17px;
-}
-.fortnight .is-past .fn-colhead { flex-direction: column; align-items: center; gap: 0; padding: 0 0 7px; }
-.fortnight .is-past .fn-date { font-size: 17px; color: var(--fn-muted); }
-.fortnight .fn-pastcard {
-  display: flex;
-  justify-content: center;
-  padding: 12px 0;
-  min-height: 150px;
-  border-radius: 11px;
-  background: var(--fn-surface);
-  font-size: 13px;
-  color: var(--fn-muted);
-  font-feature-settings: "tnum" 1;
-}
-
-.fortnight .fn-gh {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin: 4px 0 6px;
-  padding: 0 8px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--fn-muted);
-}
-.fortnight .fn-gh-slip { color: var(--fn-orange); }
-.fortnight .fn-slipcard { margin-bottom: 14px; }
-.fortnight .fn-slipcard .fn-list > li { background: rgba(var(--color-orange-rgb, 168, 79, 0), .08); }
-.fortnight .fn-slip-from { font-weight: 600; color: var(--fn-orange); }
-/* The Show all / Show fewer toggle: a text row, so Obsidian's button
-   chrome is reset the same way as button.fn-row. */
-.fortnight button.fn-more {
-  display: block;
-  width: 100%;
-  height: auto;
-  min-height: 40px;
-  margin: 0;
-  padding: 8px 12px;
-  border: 0;
-  border-top: .5px solid var(--fn-hair);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--fn-accent-text);
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.fortnight button.fn-more:hover { background: var(--background-modifier-hover, rgba(116, 116, 128, .08)); }
-
-/* Practices owed tray */
-.fortnight .fn-tray { padding: 10px 20px 0; }
-.fortnight .fn-tray .fn-gh { justify-content: flex-start; }
-.fortnight .fn-tray-card {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: var(--fn-surface);
-  border-radius: 11px;
-}
+.fortnight .fn-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-left: auto; }
+.fortnight .fn-traylabel { font-size: 13px; font-weight: 500; color: var(--fn-muted); margin-right: 6px; }
 .fortnight button.fn-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
+  gap: 8px;
+  height: 36px;
   margin: 0;
-  padding: 0 12px 0 8px;
+  padding: 0 16px 0 12px;
   border: 0;
-  border-radius: 100px;
-  background: hsla(var(--color-accent-hsl, 205, 40%, 36%), .12);
-  box-shadow: none;
-  color: var(--fn-accent-text);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--fn-ring);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: grab;
 }
-.fortnight .fn-chip-n { font-weight: 400; }
-.fortnight .fn-daily {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  margin-left: auto;
-  font-size: 12px;
+.fortnight button.fn-chip:hover { background: var(--fn-hover); }
+.fortnight .fn-chip-n { font-weight: 400; color: var(--fn-muted); }
+/* A drag grip that only shows on hover or focus (from "Quiet"). */
+.fortnight .fn-grip {
+  width: 6px;
+  height: 12px;
+  opacity: 0;
+  background-image: radial-gradient(circle, var(--fn-muted) 1px, transparent 1.2px);
+  background-size: 3px 4px;
+  transition: opacity .12s;
+}
+.fortnight button.fn-chip:hover .fn-grip,
+.fortnight button.fn-chip:focus-visible .fn-grip { opacity: 1; }
+
+/* ---- the board: flat columns, hairline rules --------------------------- */
+.fortnight .fn-board {
+  display: flex;
+  align-items: stretch;
+  border-top: 1px solid var(--fn-hair);
+  overflow-x: auto;
+  padding-bottom: 32px;
+}
+.fortnight .fn-col {
+  flex: none;
+  width: 204px;
+  padding: 0 20px 24px;
+  border-right: 1px solid var(--fn-hair);
+}
+/* Today pinned on the left while the week scrolls. Its own copy of the
+   accent wash, so the sticky column doesn't cut a hard edge in the ground. */
+.fortnight .fn-col.is-today {
+  position: -webkit-sticky;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 360px;
+  padding: 0 28px 24px 32px;
+  background-color: var(--fn-paper);
+  background-image: radial-gradient(90% 40% at 10% 0%, hsla(var(--fn-hsl), .16), hsla(var(--fn-hsl), 0) 70%);
+}
+.fortnight .fn-col.fn-next { width: 240px; }
+.fortnight .fn-col.fn-later { width: 260px; }
+.fortnight .fn-col.is-lead { border-right: 3px double var(--fn-hair); }
+/* The drop highlight is a tint LAID OVER the column, never its background
+   colour: the pinned Today column must stay opaque while days scroll under. */
+.fortnight .fn-col.is-drop {
+  background-image: linear-gradient(hsla(var(--fn-hsl), .08), hsla(var(--fn-hsl), .08));
+  box-shadow: inset 0 0 0 2px hsla(var(--fn-hsl), .45);
+}
+/* A narrow pane (or a phone, until the day view): Today stops being pinned
+   and narrows, so the rest of the week can still be scrolled to. */
+@media (max-width: 899px) {
+  .fortnight .fn-col.is-today { position: static; width: 300px; padding: 0 20px 24px 24px; }
+  .fortnight .fn-bignum { font-size: 96px; line-height: 80px; }
+}
+
+.fortnight .fn-head {
+  height: 132px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--fn-hair);
+  margin-bottom: 4px;
+}
+.fortnight .fn-num {
+  font: var(--fn-thin) 56px/56px var(--fn-display);
+  letter-spacing: -.035em;
+  font-variant-numeric: tabular-nums;
+}
+.fortnight .fn-coltitle { font: var(--fn-thin) 34px/40px var(--fn-display); letter-spacing: -.02em; }
+.fortnight .fn-dowline {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--fn-muted);
 }
-
-/* Rhythm events: fixed, tinted, time in front */
-.fortnight .fn-list > li.is-event { background: var(--background-primary-alt, rgba(116, 116, 128, .06)); }
-.fortnight .fn-evtime {
-  flex: none;
-  width: 44px;
-  padding-top: 1px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--fn-accent-text);
-  font-feature-settings: "tnum" 1;
+.fortnight .fn-daily { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; color: var(--fn-muted); }
+.fortnight .fn-head.is-today { flex-direction: row; align-items: flex-end; justify-content: flex-start; gap: 16px; }
+.fortnight .fn-bignum {
+  font: var(--fn-thin) 120px/96px var(--fn-display);
+  letter-spacing: -.05em;
+  color: var(--fn-accent);
+  margin-left: -6px;
+  font-variant-numeric: tabular-nums;
 }
-.fortnight .fn-lock { color: var(--fn-muted); padding-top: 3px; }
-.fortnight .fn-rhythm { display: inline-flex; align-items: center; gap: 3px; }
+.fortnight .fn-todaylabels { display: flex; flex-direction: column; gap: 2px; padding-bottom: 2px; }
+.fortnight .fn-todaylabels strong { font-weight: 600; }
+.fortnight .fn-todaylabels > span:not(.fn-daily) { color: var(--fn-muted); }
 
-/* Drag and drop */
-.fortnight [draggable="true"] { cursor: grab; }
-.fortnight .is-dragging { opacity: .45; }
-.fortnight .fn-col.is-drop .fn-card { box-shadow: 0 0 0 2px var(--fn-accent); }
+/* Past days: a thin numeral strip. */
+.fortnight .fn-col.is-past {
+  width: 64px;
+  padding: 74px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--fn-muted);
+}
+.fortnight .fn-pastnum { font: var(--fn-thin-2) 28px/32px var(--fn-display); letter-spacing: -.02em; color: var(--fn-ink); }
+.fortnight .fn-pastdow { font-size: 12px; font-weight: 500; margin-top: 2px; }
+.fortnight .fn-pastdone { font-size: 12px; font-weight: 500; margin-top: 28px; }
 
-/* Tick and Done */
-.fortnight .fn-list > li { display: flex; align-items: flex-start; }
-.fortnight .fn-list > li > button.fn-row { flex: 1 1 auto; min-width: 0; }
+/* ---- groups ------------------------------------------------------------ */
+.fortnight .fn-gh { font-size: 13px; line-height: 16px; font-weight: 600; color: var(--fn-muted); padding: 20px 0 8px; }
+.fortnight .fn-gh-slip { color: var(--fn-slip); border-bottom: 1px solid var(--fn-slip-rule); }
+.fortnight .fn-slipcard { margin-bottom: 12px; }
+.fortnight .fn-subhead { font-size: 13px; line-height: 16px; font-weight: 600; color: var(--fn-muted); padding: 16px 0 6px; }
+.fortnight .fn-empty-day { font-size: 13px; color: var(--fn-muted); padding: 14px 0; }
+
+/* ---- rows -------------------------------------------------------------- */
+.fortnight .fn-list { list-style: none; margin: 0; padding: 0; }
+.fortnight .fn-list > li { display: flex; align-items: flex-start; position: relative; }
+.fortnight .fn-list > li + li { border-top: 1px solid var(--fn-hair); }
+.fortnight .fn-list > li:hover,
+.fortnight .fn-list > li:focus-within { background: var(--fn-hover); }
+
 .fortnight button.fn-tick {
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 44px;
-  margin: 0;
-  padding: 0 0 0 8px;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--text-faint, rgba(60, 60, 67, .46));
-  cursor: pointer;
-}
-.fortnight button.fn-tick:hover,
-.fortnight button.fn-tick.is-ticking { color: var(--fn-accent); }
-.fortnight button.fn-tick svg { width: 20px; height: 20px; }
-.fortnight .fn-list > li.is-done .fn-title { color: var(--fn-muted); text-decoration: line-through; }
-.fortnight .fn-list > li.is-done { opacity: .75; }
-.fortnight button.fn-done {
-  display: block;
-  width: 100%;
-  height: auto;
-  min-height: 40px;
-  margin: 0;
-  padding: 8px 12px;
-  border: 0;
-  border-top: .5px solid var(--fn-hair);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--fn-muted);
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-.fortnight button.fn-done:hover { background: var(--background-modifier-hover, rgba(116, 116, 128, .08)); }
-
-/* Quick-add */
-.fortnight .fn-addrow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 4px 12px;
-  border-top: .5px solid var(--fn-hair);
-  color: var(--fn-muted);
-}
-.fortnight .fn-addrow.is-focused { background: hsla(var(--color-accent-hsl, 205, 40%, 36%), .08); }
-.fortnight .fn-add-ic { color: var(--fn-accent-text); }
-.fortnight .fn-add-ic svg { width: 16px; height: 16px; }
-.fortnight input.fn-addinput {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 32px;
-  padding: 4px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--text-normal);
-  font: inherit;
-  font-size: 15px;
-}
-.fortnight input.fn-addinput:focus { box-shadow: none; outline: none; }
-.fortnight input.fn-addinput::placeholder { color: var(--fn-muted); }
-
-/* Next week and Later */
-.fortnight .fn-col.fn-next { width: 232px; }
-.fortnight .fn-col.fn-later { width: 244px; }
-.fortnight .fn-col.fn-next { margin-left: 12px; }
-.fortnight .fn-range-sm { margin-left: auto; font-size: 12px; color: var(--fn-muted); font-feature-settings: "tnum" 1; }
-.fortnight .fn-subhead {
-  padding: 10px 12px 4px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--fn-muted);
-}
-.fortnight .fn-nd { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; font-size: 13px; }
-.fortnight .fn-nd-dow { width: 52px; white-space: nowrap; color: var(--fn-muted); font-feature-settings: "tnum" 1; }
-.fortnight .fn-nd-dots { flex: 1 1 auto; display: flex; gap: 3px; }
-.fortnight .fn-nd-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--fn-accent); opacity: .75; }
-.fortnight .fn-nd-dots i.is-event { background: transparent; box-shadow: inset 0 0 0 1.5px var(--fn-accent); border-radius: 2px; opacity: 1; }
-.fortnight .fn-nd-n { color: var(--fn-muted); font-feature-settings: "tnum" 1; }
-.fortnight .fn-col.is-nextweek .fn-dow { color: var(--fn-muted); }
-.fortnight .fn-col-hint { margin: -4px 8px 6px; font-size: 12px; color: var(--fn-muted); }
-
-.fortnight .fn-card {
-  background: var(--fn-surface);
-  border-radius: 11px;
-  overflow: hidden;
-}
-.fortnight .is-today .fn-card:not(.fn-slipcard) { box-shadow: 0 0 0 1.5px var(--fn-accent-line); }
-.fortnight .fn-empty-day {
-  padding: 12px;
-  min-height: 44px;
-  font-size: 13px;
-  color: var(--fn-muted);
-}
-
-.fortnight .fn-list { list-style: none; margin: 0; padding: 0; }
-.fortnight .fn-list > li { position: relative; }
-.fortnight .fn-list > li + li::before {
-  content: "";
-  position: absolute;
-  left: 12px;
-  right: 0;
-  top: 0;
-  height: .5px;
-  background: var(--fn-hair);
-}
-/* A whole-row button: reset Obsidian's button chrome. */
-.fortnight button.fn-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  width: 100%;
+  width: 44px;
+  height: 44px;
+  margin: 0 0 0 -14px;
+  padding: 12px 0 0 14px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+.fortnight .fn-ring {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.25px var(--fn-ring);
+  transition: box-shadow .12s, background-color .12s;
+}
+.fortnight button.fn-tick:hover .fn-ring,
+.fortnight button.fn-tick:focus-visible .fn-ring { box-shadow: inset 0 0 0 1.5px var(--fn-accent); }
+.fortnight button.fn-tick.is-ticking .fn-ring { background-color: var(--fn-accent); box-shadow: none; }
+
+.fortnight button.fn-row {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
   height: auto;
   min-height: 44px;
   margin: 0;
-  padding: 9px 12px;
+  padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  color: inherit;
-  font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.fortnight button.fn-row:hover { background: var(--background-modifier-hover, rgba(116, 116, 128, .08)); }
-.fortnight .fn-body { flex: 1 1 auto; min-width: 0; }
+.fortnight [draggable="true"] { cursor: grab; }
+.fortnight .is-dragging { opacity: .45; }
+.fortnight .fn-body { flex: 1 1 auto; min-width: 0; display: block; padding: 12px 0 11px; }
 .fortnight .fn-title {
   display: block;
   font-size: 15px;
   line-height: 20px;
-  letter-spacing: -.24px;
-  color: var(--text-normal);
+  font-weight: 400;
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -403,15 +274,169 @@
 .fortnight .fn-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 10px;
-  margin-top: 2px;
+  gap: 3px 10px;
+  margin-top: 4px;
   font-size: 12px;
   line-height: 16px;
+  font-weight: 500;
   color: var(--fn-muted);
 }
-.fortnight .fn-due { font-weight: 600; color: var(--fn-accent-text); }
-.fortnight .fn-time { font-weight: 600; color: var(--fn-accent-text); font-feature-settings: "tnum" 1; }
-.fortnight .fn-nudge { display: inline-flex; align-items: center; gap: 3px; }
-.fortnight .fn-ic { display: inline-flex; }
-.fortnight .fn-ic svg { width: 12px; height: 12px; }
-.fortnight .fn-due.is-now { color: var(--fn-orange); }
+.fortnight .fn-meta > span { display: inline-flex; align-items: center; gap: 4px; }
+.fortnight .fn-slip-from { color: var(--fn-slip); font-weight: 600; }
+/* Small text never carries the accent: due dates are ink, weighted. */
+.fortnight .fn-due { color: var(--fn-ink); font-weight: 600; }
+.fortnight .fn-due.is-now { color: var(--fn-slip); }
+.fortnight .fn-due.is-deadline { padding: 0 7px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--fn-slip-rule); color: var(--fn-slip); }
+.fortnight .fn-time { color: var(--fn-ink); font-variant-numeric: tabular-nums; }
+
+/* Events start at the margin (from "Quiet"): the thin time sits where a
+   to-do's tick would be; the lock only hints on hover. */
+.fortnight .fn-evtime {
+  flex: none;
+  width: 58px;
+  padding-top: 10px;
+  font: var(--fn-thin) 20px/24px var(--fn-display);
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.fortnight .fn-evtime.is-allday { font: 500 12px/16px var(--font-interface, -apple-system, sans-serif); color: var(--fn-muted); padding-top: 14px; letter-spacing: 0; }
+.fortnight .fn-lock { flex: none; padding: 14px 0 0 6px; color: var(--fn-muted); opacity: 0; transition: opacity .12s; }
+.fortnight .fn-list > li:hover .fn-lock,
+.fortnight .fn-list > li:focus-within .fn-lock { opacity: 1; }
+
+.fortnight .fn-list > li.is-done .fn-title { color: var(--fn-muted); text-decoration: line-through; }
+
+/* ---- more / done / add -------------------------------------------------- */
+.fortnight button.fn-more,
+.fortnight button.fn-done {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--fn-hair);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.fortnight button.fn-more { color: var(--fn-ink); }
+.fortnight button.fn-more:hover,
+.fortnight button.fn-more:focus-visible { text-decoration: underline; text-decoration-color: var(--fn-accent); text-underline-offset: 4px; }
+.fortnight button.fn-done { color: var(--fn-muted); }
+.fortnight button.fn-done:hover { color: var(--fn-ink); }
+
+.fortnight .fn-addrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding-left: 2px;
+  border-top: 1px solid var(--fn-hair);
+  color: var(--fn-muted);
+}
+.fortnight .fn-add-ic { color: var(--fn-accent); }
+.fortnight .fn-add-ic svg { width: 16px; height: 16px; }
+.fortnight input.fn-addinput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--fn-ink);
+  font: inherit;
+  font-size: 14px;
+}
+.fortnight input.fn-addinput:focus { box-shadow: none; outline: none; }
+.fortnight input.fn-addinput::placeholder { color: var(--fn-muted); opacity: 1; }
+.fortnight .fn-addrow.is-focused { box-shadow: inset 0 -1px 0 var(--fn-accent); }
+
+/* ---- next week summary -------------------------------------------------- */
+.fortnight .fn-nd { display: flex; align-items: center; gap: 10px; height: 30px; font-size: 13px; }
+.fortnight .fn-nd:first-of-type { margin-top: 6px; }
+.fortnight .fn-nd-dow { width: 52px; color: var(--fn-muted); font-variant-numeric: tabular-nums; }
+.fortnight .fn-nd-dots { flex: 1 1 auto; display: flex; gap: 5px; }
+.fortnight .fn-nd-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--fn-ink); }
+.fortnight .fn-nd-dots i.is-event { background: transparent; box-shadow: inset 0 0 0 1.25px var(--fn-ink); border-radius: 1px; }
+.fortnight .fn-nd-n { color: var(--fn-muted); font-variant-numeric: tabular-nums; }
+
+/* ---- the daily welcome, lying over the board ---------------------------- */
+.fortnight .fn-intro {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 100%;
+  z-index: 5;
+  padding: 24px;
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity .45s ease;
+  background-color: var(--fn-paper);
+  background-image:
+    radial-gradient(60% 45% at 6% 0%, hsla(var(--fn-hsl), .2), hsla(var(--fn-hsl), 0) 70%),
+    radial-gradient(55% 45% at 100% 100%, rgba(var(--fn-orgb), .14), rgba(var(--fn-orgb), 0) 70%);
+}
+.fortnight .fn-intro.is-out { opacity: 0; pointer-events: none; }
+.fortnight .fn-intro:focus { outline: none; }
+.fortnight .fn-intro-screen {
+  position: absolute;
+  left: 64px;
+  right: 64px;
+  top: 50%;
+  opacity: 0;
+  transform: translateY(-50%) translateY(6px);
+  transition: opacity .45s ease, transform .45s ease;
+}
+.fortnight .fn-intro-screen.is-in { opacity: 1; transform: translateY(-50%); }
+/* Out first, then in (the delay equals the fade): the two layouts never
+   sit on top of each other. */
+.fortnight .fn-intro-screen.is-in { transition-delay: .45s; }
+.fortnight .fn-intro-screen.is-welcome { display: flex; align-items: flex-end; gap: 28px; }
+.fortnight .fn-intro-num {
+  font: var(--fn-thin-0) 200px/150px var(--fn-display);
+  letter-spacing: -.06em;
+  color: var(--fn-accent);
+  margin-left: -10px;
+  font-variant-numeric: tabular-nums;
+}
+.fortnight .fn-intro-title { font: var(--fn-thin) 40px/46px var(--fn-display); letter-spacing: -.025em; }
+.fortnight .fn-intro-title.is-big { font-size: 48px; line-height: 52px; margin-bottom: 36px; }
+.fortnight .fn-intro-sub { font-size: 17px; line-height: 24px; color: var(--fn-muted); margin-top: 6px; }
+.fortnight .fn-stats { display: flex; width: 100%; border-top: 1px solid var(--fn-hair); }
+.fortnight .fn-stat { flex: 1 1 0; display: flex; flex-direction: column; gap: 6px; padding: 16px 20px 0 0; }
+.fortnight .fn-stat + .fn-stat { padding-left: 20px; border-left: 1px solid var(--fn-hair); }
+.fortnight .fn-snum { font: var(--fn-thin) 64px/64px var(--fn-display); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.fortnight .fn-stat.is-slip .fn-snum { color: var(--fn-slip); }
+.fortnight .fn-slabel { font-size: 14px; font-weight: 500; color: var(--fn-muted); }
+.fortnight .fn-intro-hint {
+  position: absolute;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--fn-muted);
+}
+/* A narrow pane (or a phone): the numeral above the words, smaller. */
+@media (max-width: 640px) {
+  .fortnight .fn-intro-screen { left: 24px; right: 24px; }
+  .fortnight .fn-intro-screen.is-welcome { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .fortnight .fn-intro-num { font-size: 120px; line-height: 100px; }
+  .fortnight .fn-intro-title { font-size: 32px; line-height: 38px; }
+  .fortnight .fn-snum { font-size: 44px; line-height: 48px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fortnight .fn-intro,
+  .fortnight .fn-intro-screen { transition: none; }
+}

@@ -8,7 +8,6 @@ const D = require('./dates');
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 function greeting(hour, name) {
   const part = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -23,24 +22,25 @@ function isPlanningDay(iso, weekStart) {
   return wd === weekStart || wd === (weekStart + 6) % 7;
 }
 
-function weekSummary(board) {
+/* What is waiting, as figures: [{ n, label, slip }]. */
+function weekStats(board) {
   const reminders = board.days.filter(d => !d.past)
     .reduce((n, d) => n + d.cards.filter(c => c.source === 'nudge').length, 0);
   const toPlace = board.tray.reduce((n, t) => n + (t.need > 0 ? 1 : 0), 0);
   return [
-    board.slipped.length ? `${board.slipped.length} slipped` : '',
-    toPlace ? plural(toPlace, 'practice to place', 'practices to place') : '',
-    reminders ? plural(reminders, 'reminder this week', 'reminders this week') : '',
-  ].filter(Boolean);
+    { n: board.slipped.length, label: 'slipped', slip: true },
+    { n: toPlace, label: toPlace === 1 ? 'practice to place' : 'practices to place', slip: false },
+    { n: reminders, label: reminders === 1 ? 'reminder this week' : 'reminders this week', slip: false },
+  ].filter(x => x.n);
 }
 
-function todaySummary(board) {
+function todayStats(board) {
   const today = board.days.find(d => d.date === board.today);
   const n = today ? today.cards.length : 0;
   return [
-    n ? plural(n, 'thing today', 'things today') : '',
-    board.slipped.length ? `${board.slipped.length} slipped` : '',
-  ].filter(Boolean);
+    { n, label: n === 1 ? 'thing today' : 'things today', slip: false },
+    { n: board.slipped.length, label: 'slipped', slip: true },
+  ].filter(x => x.n);
 }
 
 /* now: { date: 'YYYY-MM-DD', hour: 0-23 }. The planning days come from the
@@ -48,15 +48,17 @@ function todaySummary(board) {
    welcome and the board always agree on which week is being planned. */
 function introScreens(board, now, settings = {}) {
   const week = isPlanningDay(now.date, D.weekday(board.weekStart));
-  const bits = week ? weekSummary(board) : todaySummary(board);
+  const stats = week ? weekStats(board) : todayStats(board);
   return {
     welcome: {
       title: greeting(now.hour, settings.name),
       sub: `${DAY_NAMES[D.weekday(now.date)]} ${+now.date.slice(8, 10)} ${MONTHS[+now.date.slice(5, 7) - 1]}`,
+      day: String(+now.date.slice(8, 10)),
     },
     plan: {
       title: week ? 'Plan the week' : 'Plan today',
-      summary: bits.length ? bits.join(' · ') : 'Nothing waiting — a clean slate.',
+      summary: stats.length ? stats.map(x => `${x.n} ${x.label}`).join(' · ') : 'Nothing waiting — a clean slate.',
+      stats,
     },
   };
 }
