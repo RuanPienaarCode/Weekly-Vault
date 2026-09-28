@@ -175,7 +175,7 @@ Ruan's own plugins come first. Nudge and Rhythm cards now appear straight after 
   - Out: sorting practices in the review (open question 4: no).
   - Blocked by: #4, #5
 
-- [ ] **#13 Phone day view with the action sheet**
+- [x] **#13 Phone day view with the action sheet** — done 28 Sep 2026 in the Hairline look; long-press reorder waits for #8; Drop is disabled on 🔁 to-dos (a cancelled line ends the repeat in Tasks)
   - AC:
     - Below the phone breakpoint, the view is a single day with a day switcher.
     - Tapping a card opens a sheet: Today · Tomorrow · Pick a day (an inline 14-day picker) · Next week · Later · Done · Drop.

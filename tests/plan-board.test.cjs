@@ -2,7 +2,7 @@
 /* planBoard: the pure board model. Fixtures are in-memory tasks; every
    expected value is a hand-written literal. */
 const assert = require('node:assert');
-const { planBoard } = require('../src/plan');
+const { planBoard, actionsFor } = require('../src/plan');
 
 const dates = b => b.days.map(d => d.date);
 const task = (raw, path = 'Notes/Home.md', line = 0) => ({ path, line, raw });
@@ -381,6 +381,27 @@ assert.strictEqual(planBoard({ today: '2026-10-04', tasks: [], settings: {} }).n
   /* the week has come: it slips again, by its overdue 📅 */
   const later = planBoard({ today: '2026-10-06', settings: {}, tasks: [parked] });
   assert.deepStrictEqual(later.slipped.map(c => c.text), ['Licence disc']);
+}
+
+/* 18. what a card can do — ONE rule for the phone sheet and the desktop
+       menu: done cards only open; events only open; reminders and
+       practices need a day; a 📅 blocks Later, and Next week if due
+       before next Monday; a 🔁 to-do can't be dropped (a cancelled line
+       ends the whole repeat in Tasks) */
+{
+  const b = planBoard({ today: WED, tasks: [], settings: {} });
+  const only = a => Object.keys(a).filter(k => a[k]).sort();
+  const t = (raw, extra = {}) => Object.assign({ source: 'tasks', raw, date: '2026-10-01', due: '', done: false }, extra);
+  assert.deepStrictEqual(only(actionsFor(t('- [ ] Paint'), b)), ['day', 'done', 'drop', 'later', 'nextWeek', 'open']);
+  assert.deepStrictEqual(only(actionsFor(t('- [x] Painted ✅ 2026-09-30', { done: true }), b)), ['open']);
+  assert.deepStrictEqual(only(actionsFor({ source: 'event', date: '2026-10-01' }, b)), ['open']);
+  assert.deepStrictEqual(only(actionsFor({ source: 'nudge', raw: '', date: '2026-10-01' }, b)), ['day', 'done', 'open']);
+  assert.deepStrictEqual(only(actionsFor({ source: 'practice', fromTray: true }, b)), ['day', 'open']);
+  assert.deepStrictEqual(only(actionsFor(t('- [ ] Tax 📅 2026-10-02', { due: '2026-10-02' }), b)), ['day', 'done', 'drop', 'open']);
+  assert.deepStrictEqual(only(actionsFor(t('- [ ] Rego 📅 2026-07-31', { due: '2026-07-31' }), b)), ['day', 'done', 'drop', 'nextWeek', 'open']);
+  const bins = actionsFor(t('- [ ] Bins out 🔁 every week ⏳ 2026-10-01'), b);
+  assert.strictEqual(bins.drop, false);
+  assert.strictEqual(bins.dropWhy, 'repeats');
 }
 
 console.log('plan-board OK');

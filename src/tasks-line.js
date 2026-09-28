@@ -45,8 +45,8 @@ const TAIL_RE = /(?:(?:^|\s)\^([A-Za-z0-9-]+))?\s*$/;
 
 /* The emoji Fortnight writes when it adds a field the line doesn't have, and
    what each writable field accepts. */
-const WRITE_MARK = { scheduled: '⏳', start: '🛫', id: '🆔' };
-const VALID = { scheduled: /^\d{4}-\d{2}-\d{2}$/, start: /^\d{4}-\d{2}-\d{2}$/, id: /^[A-Za-z0-9_-]+$/ };
+const WRITE_MARK = { scheduled: '⏳', start: '🛫', id: '🆔', cancelledDate: '❌' };
+const VALID = { scheduled: /^\d{4}-\d{2}-\d{2}$/, start: /^\d{4}-\d{2}-\d{2}$/, id: /^[A-Za-z0-9_-]+$/, cancelledDate: /^\d{4}-\d{2}-\d{2}$/ };
 
 /* Split a line into its parts, with every field token's position in raw.
    Walking back from the end, the first hit is the rightmost token; when a

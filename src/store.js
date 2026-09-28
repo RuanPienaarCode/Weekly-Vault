@@ -297,6 +297,7 @@ function makeStore(plugin) {
   function park(card, where, monday, today = D.todayISO()) { return once(card, () => parkNow(card, where, monday, today)); }
   async function parkNow(card, where, monday, today) {
     if (card.source === 'event') return { ok: false, reason: 'locked' };
+    if (isDone(card)) return { ok: false, reason: 'done' };
     /* Reminders and practices need a day for now (#11, #12). */
     if (card.source !== 'tasks') return { ok: false, reason: 'needs-day' };
     /* 📅 is never touched. Next week (🛫 its Monday) is fine for a deadline
@@ -317,6 +318,23 @@ function makeStore(plugin) {
     return r;
   }
 
+  /* Drop: the to-do is cancelled ([-]) — only the box changes, and the line
+     stays in its note. Says what it was, so the board can offer Undo. */
+  function drop(card, today = D.todayISO()) { return once(card, () => dropNow(card, today)); }
+  async function dropNow(card, today) {
+    if (card.source === 'event') return { ok: false, reason: 'locked' };
+    if (card.source !== 'tasks') return { ok: false, reason: 'not-droppable' };
+    /* Tasks never makes the next occurrence of a cancelled line: dropping
+       a 🔁 to-do would end its repeat for good. */
+    if ((L.parseTask(card.raw || '') || {}).recurrence) return { ok: false, reason: 'repeats' };
+    let after = null;
+    /* Cancelled the way Tasks cancels: [-] and a ❌ date. */
+    const r = await editLine(card, raw => (after = L.setField(L.setStatus(raw, '-'), 'cancelledDate', today)));
+    if (!r.ok) return r;
+    const cr = card.raw.endsWith('\r') ? '\r' : '';
+    return { ok: true, before: card.raw, after: after + cr };
+  }
+
   /* Undo: put back the line that was there, if it still reads as we left
      it. editLine keeps the line's own \r. */
   function revert(card, now, before) {
@@ -327,8 +345,12 @@ function makeStore(plugin) {
      a Tasks line by its ⏳ alone (📅 is never touched), a reminder through
      Nudge, a practice by its promise in Rhythm's log. Events are fixed. */
   function move(card, date) { return once(card, () => moveNow(card, date)); }
+  /* Finished is finished: its plan date is history. */
+  const isDone = card => card.done || (card.source === 'tasks' && !!(L.parseTask(card.raw || '') || {}).done);
+
   async function moveNow(card, date) {
     if (card.source === 'event') return { ok: false, reason: 'locked' };
+    if (isDone(card)) return { ok: false, reason: 'done' };
     if (card.source === 'tasks') return editLine(card, raw => onDay(raw, date));
     if (card.source === 'nudge') {
       const ours = nudge();
@@ -382,7 +404,7 @@ function makeStore(plugin) {
     return { ok: false, reason: 'unknown' };
   }
 
-  return { load, loadRhythm, move, park, revert, tick, add, plannerPath, problems: () => problems.slice() };
+  return { load, loadRhythm, move, park, revert, drop, tick, add, plannerPath, problems: () => problems.slice() };
 }
 
 module.exports = { makeStore };

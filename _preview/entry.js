@@ -18,6 +18,7 @@ const files = q.get('empty') === '1' ? {} : {
     '# Home', '',
     `- [ ] Call plumber about the leak ⏳ ${d(0)} ⏫`,
     `- [ ] Buy light bulbs ⏳ ${d(0)}`,
+    `- [ ] Take the bins out 🔁 every week ⏳ ${d(0)}`,
     `- [ ] Book car service ⏳ ${d(1)} 📅 ${d(3)}`,
     `- [x] Water the garden ⏳ ${d(0)} ✅ ${d(0)}`,
     '- [ ] Sort out the garage',

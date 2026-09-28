@@ -21,6 +21,11 @@ class FortnightView extends ItemView {
     await this.ctl.start();
   }
 
+  /* Crossing the phone width swaps the board for the day view. */
+  onResize() {
+    if (this.ctl) this.ctl.relayout();
+  }
+
   async onClose() {
     if (this.ctl) { this.ctl.stop(); this.ctl = null; }
   }

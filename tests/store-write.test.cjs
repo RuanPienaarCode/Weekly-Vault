@@ -415,5 +415,35 @@ const rhythm = { rhythm: { settings: {} } };
     assert.ok(text.endsWith('Notes.\n'), text);
   }
 
+  /* 17. Drop marks a to-do cancelled — the box only — and says what it was,
+         so Undo can put it back; reminders, practices and events refuse */
+  {
+    const app = makeApp({ 'H.md': '# H\r\n- [ ] Clean gutters ⏳ 2026-10-01\r\n' });
+    const store = makeStore({ app, settings: {} });
+    const card = { source: 'tasks', path: 'H.md', line: 1, raw: '- [ ] Clean gutters ⏳ 2026-10-01\r' };
+    const r = await store.drop(card, '2026-09-30');
+    /* cancelled the way Tasks cancels: [-] and a ❌ date */
+    assert.deepStrictEqual(r, { ok: true, before: '- [ ] Clean gutters ⏳ 2026-10-01\r', after: '- [-] Clean gutters ⏳ 2026-10-01 ❌ 2026-09-30\r' });
+    assert.strictEqual(app.files.get('H.md'), '# H\r\n- [-] Clean gutters ⏳ 2026-10-01 ❌ 2026-09-30\r\n');
+    await store.revert(card, r.after, r.before);
+    assert.strictEqual(app.files.get('H.md'), '# H\r\n- [ ] Clean gutters ⏳ 2026-10-01\r\n');
+    for (const source of ['nudge', 'practice']) assert.deepStrictEqual(await store.drop({ source, path: 'p', text: 'x' }), { ok: false, reason: 'not-droppable' });
+    assert.deepStrictEqual(await store.drop({ source: 'event', path: 'e' }), { ok: false, reason: 'locked' });
+    /* a 🔁 repeat would end for good: refused */
+    const app2 = makeApp({ 'B.md': '- [ ] Bins out 🔁 every week ⏳ 2026-09-28' });
+    assert.deepStrictEqual(await makeStore({ app: app2, settings: {} }).drop({ source: 'tasks', path: 'B.md', line: 0, raw: '- [ ] Bins out 🔁 every week ⏳ 2026-09-28' }, '2026-09-30'), { ok: false, reason: 'repeats' });
+    assert.strictEqual(app2.files.get('B.md'), '- [ ] Bins out 🔁 every week ⏳ 2026-09-28');
+  }
+
+  /* 17b. a done card can't be moved or parked (its plan date is history) */
+  {
+    const app = makeApp({ 'H.md': '- [x] Called plumber ⏳ 2026-09-29 ✅ 2026-09-28' });
+    const store = makeStore({ app, settings: {} });
+    const done = { source: 'tasks', path: 'H.md', line: 0, raw: '- [x] Called plumber ⏳ 2026-09-29 ✅ 2026-09-28', done: true };
+    assert.deepStrictEqual(await store.move(done, '2026-10-01'), { ok: false, reason: 'done' });
+    assert.deepStrictEqual(await store.park(done, 'nextWeek', '2026-10-05', '2026-09-30'), { ok: false, reason: 'done' });
+    assert.strictEqual(app.files.get('H.md'), '- [x] Called plumber ⏳ 2026-09-29 ✅ 2026-09-28');
+  }
+
   console.log('store-write OK');
 })().catch(e => { console.error(e); process.exit(1); });

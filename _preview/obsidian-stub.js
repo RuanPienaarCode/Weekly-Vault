@@ -67,5 +67,5 @@ export class Notice {
 /* A text glyph per icon name, so icon-only buttons are visible here. */
 const GLYPH = { inbox: '▭', 'calendar-range': '▦', plus: '+', circle: '○', 'check-circle-2': '✓', lock: '🔒', bell: '🔔', repeat: '↻', sun: '☀', calendar: '▦' };
 export function setIcon(el, name) { el.textContent = GLYPH[name] || ''; }
-export const Platform = { isMobile: new URLSearchParams(location.search).get('mobile') === '1' };
+export const Platform = { isMobile: new URLSearchParams(location.search).get('mobile') === '1', isPhone: new URLSearchParams(location.search).get('mobile') === '1' };
 export const normalizePath = p => p.replace(/\\/g, '/').replace(/\/+$/, '');

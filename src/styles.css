@@ -465,3 +465,143 @@
   .fortnight .fn-intro,
   .fortnight .fn-intro-screen { transition: none; }
 }
+
+/* ---- phone (or a pane under 640px): one day at a time ------------------ */
+.fortnight.is-phone .fn-top { padding: 16px 16px 12px; gap: 10px; }
+.fortnight.is-phone .fn-range { font-size: 26px; line-height: 32px; }
+.fortnight.is-phone .fn-traywrap { flex-basis: 100%; margin-left: 0; }
+.fortnight.is-phone .fn-traylabel { display: none; }
+.fortnight .fn-switch {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-top: 1px solid var(--fn-hair);
+  border-bottom: 1px solid var(--fn-hair);
+  padding: 0 8px;
+}
+.fortnight .fn-switch::-webkit-scrollbar { display: none; }
+.fortnight button.fn-sw {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 52px;
+  height: 60px;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+}
+.fortnight .fn-swl { font-size: 12px; line-height: 14px; font-weight: 500; color: var(--fn-muted); }
+.fortnight .fn-swn { font: var(--fn-thin-2) 24px/28px var(--fn-display); font-variant-numeric: tabular-nums; }
+.fortnight .fn-swc { position: absolute; top: 6px; right: 4px; font-size: 11px; font-weight: 600; color: var(--fn-muted); }
+.fortnight button.fn-sw.is-on .fn-swn { color: var(--fn-accent); }
+.fortnight button.fn-sw.is-on::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--fn-accent); }
+.fortnight .fn-pbody .fn-col,
+.fortnight .fn-pbody .fn-col.is-today {
+  position: static;
+  width: auto;
+  padding: 0 16px 24px;
+  border-right: 0;
+  background: transparent;
+}
+.fortnight .fn-pbody .fn-col.is-nextweek { border-top: 1px solid var(--fn-hair); }
+.fortnight.is-phone .fn-head { height: auto; padding-top: 16px; }
+.fortnight.is-phone .fn-bignum { font-size: 96px; line-height: 80px; }
+
+/* ---- the tap sheet ----------------------------------------------------- */
+.fortnight .fn-sheet-layer { position: absolute; left: 0; right: 0; top: 0; height: 100%; z-index: 6; }
+.fortnight .fn-sheet-back { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0, 0, 0, .32); }
+.fortnight .fn-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 88%;
+  overflow-y: auto;
+  padding: 6px 16px 24px;
+  border-radius: 16px 16px 0 0;
+  background-color: var(--fn-paper);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, .18);
+}
+.fortnight .fn-sh-grab { width: 36px; height: 5px; margin: 0 auto 10px; border-radius: 3px; background: var(--fn-hair); }
+.fortnight .fn-sh-title { font: var(--fn-thin-2) 26px/32px var(--fn-display); letter-spacing: -.02em; overflow-wrap: anywhere; }
+.fortnight .fn-sh-meta { font-size: 13px; color: var(--fn-muted); margin: 4px 0 14px; }
+.fortnight .fn-sh-h { font-size: 13px; font-weight: 600; color: var(--fn-muted); margin: 18px 0 8px; }
+/* The usual answers as big targets (from "Tactile"). */
+.fortnight .fn-sh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fortnight button.fn-sh-big {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  min-height: 64px;
+  height: auto;
+  margin: 0;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--fn-ring);
+  text-align: left;
+  cursor: pointer;
+}
+.fortnight button.fn-sh-big:hover,
+.fortnight button.fn-sh-big:focus-visible { background: var(--fn-hover); }
+.fortnight .fn-sh-label { font-size: 17px; line-height: 22px; font-weight: 500; }
+.fortnight .fn-sh-sub { font-size: 13px; line-height: 16px; color: var(--fn-muted); }
+.fortnight .fn-sheet button:disabled { opacity: .38; cursor: default; }
+.fortnight .fn-picker { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.fortnight button.fn-pk {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  height: auto;
+  margin: 0;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+.fortnight button.fn-pk:hover,
+.fortnight button.fn-pk:focus-visible { background: var(--fn-hover); }
+.fortnight .fn-pk-dow { font-size: 11px; line-height: 14px; font-weight: 500; color: var(--fn-muted); }
+.fortnight .fn-pk-num { font: var(--fn-thin-2) 20px/24px var(--fn-display); font-variant-numeric: tabular-nums; }
+.fortnight button.fn-pk.is-today .fn-pk-num { color: var(--fn-accent); }
+.fortnight button.fn-pk.is-current { box-shadow: inset 0 0 0 1px var(--fn-ring); }
+.fortnight .fn-sh-actions { margin-top: 16px; border-top: 1px solid var(--fn-hair); }
+.fortnight button.fn-sh-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--fn-hair);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 17px;
+  text-align: left;
+  cursor: pointer;
+}
+.fortnight button.fn-sh-row.is-done .fn-sh-label { font-weight: 600; }
+.fortnight button.fn-sh-row .fn-sh-sub { margin-left: 10px; }
+.fortnight button.fn-sh-row.is-drop { color: #b3261e; }
+.theme-dark .fortnight button.fn-sh-row.is-drop { color: #ff8a80; }
+.fortnight button.fn-sh-row.is-cancel { color: var(--fn-muted); border-bottom: 0; }
+/* Chips are tapped on a phone: full 44px targets. */
+.fortnight.is-phone button.fn-chip { height: 44px; }

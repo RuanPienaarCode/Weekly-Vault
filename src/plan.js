@@ -223,4 +223,26 @@ function placeRhythm(data, days, today, start, byDate, nwDays, nwByDate) {
   }));
 }
 
-module.exports = { planBoard, plannerPathOf };
+/* What a card can do — ONE rule, used by the phone sheet and the desktop
+   Move menu alike (the store enforces the same limits on writes). */
+function actionsFor(card, board) {
+  const a = { open: true, day: false, nextWeek: false, later: false, done: false, drop: false, dropWhy: '' };
+  /* Finished, or fixed: nothing to move. */
+  if (card.done || card.source === 'event') return a;
+  a.day = true;
+  a.done = !card.fromTray;
+  if (card.source === 'tasks') {
+    const t = L.parseTask(card.raw || '');
+    const due = card.due || (t && t.due) || '';
+    const dueSooner = !!due && due >= board.today && due < board.nextWeek.start;
+    a.nextWeek = !dueSooner && !(card.slot === 'nextWeek' && !card.date);
+    a.later = !due && card.slot !== 'later';
+    /* Tasks never makes the next occurrence of a cancelled line: dropping a
+       🔁 to-do would end the repeat for good. */
+    if (t && t.recurrence) a.dropWhy = 'repeats';
+    else a.drop = true;
+  }
+  return a;
+}
+
+module.exports = { planBoard, plannerPathOf, actionsFor };

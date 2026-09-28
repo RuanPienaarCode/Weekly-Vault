@@ -2,8 +2,8 @@
 /* The board (desktop): this week's days as columns in the Grouped look.
    What goes where is planBoard's call; moving a card is the store's. */
 
-const { setIcon, Menu, Notice } = require('obsidian');
-const { planBoard } = require('./plan');
+const { setIcon, Menu, Notice, Platform } = require('obsidian');
+const { planBoard, actionsFor } = require('./plan');
 const { introScreens, shouldShowIntro } = require('./intro');
 const D = require('./dates');
 
@@ -31,6 +31,12 @@ function mountBoard(view) {
   /* What is typed in each day's add field, kept across redraws (a sync or
      the previous add landing mid-typing must not wipe it). */
   const drafts = new Map();
+  /* Phone (or a narrow pane): one day at a time. What is shown — a date,
+     'nextWeek' or 'later' — and whether the last draw was the phone one. */
+  let phoneSel = null;
+  let wasPhone = null;
+  let sheet = null;
+  const isPhone = () => !!(Platform && Platform.isPhone) || (root.clientWidth > 0 && root.clientWidth < 640);
   /* Next week shown as its seven days (else one summary column). */
   let nextOpen = false;
   /* Days whose Done group is open, by date. */
@@ -65,6 +71,9 @@ function mountBoard(view) {
     'no-nudge': "Nudge isn't available",
     'no-rhythm': "Rhythm isn't available",
     'needs-day': 'reminders and practices need a day — drop it on one',
+    'not-droppable': 'only to-dos can be dropped',
+    done: "it's done — its date is history",
+    repeats: 'it repeats (🔁), and dropping it would end the repeat — tick it instead, or change the repeat in its note',
     'has-deadline': 'it has a 📅 deadline — put it on a day instead, or remove the deadline in its note',
     'due-sooner': "it's due before next week — put it on a day this week instead",
   };
@@ -141,12 +150,11 @@ function mountBoard(view) {
         .onClick(() => moveTo(card, d.date)));
     }
     if (card.source === 'tasks') {
-      /* Same rules as the store: a deadline due before next week can't be
-         parked there, and Later takes no dated card. */
-      const dueSooner = card.due && card.due >= board.today && card.due < board.nextWeek.start;
+      /* The same rule as the phone sheet (actionsFor in plan.js). */
+      const can = actionsFor(card, board);
       menu.addSeparator();
-      menu.addItem(i => i.setTitle('Next week (any day)').setIcon('calendar-range').setDisabled(dueSooner || (card.slot === 'nextWeek' && !card.date)).onClick(() => parkTo(card, nextDest(board))));
-      if (!card.due) menu.addItem(i => i.setTitle('Later').setIcon('inbox').setDisabled(card.slot === 'later').onClick(() => parkTo(card, LATER)));
+      menu.addItem(i => i.setTitle('Next week (any day)').setIcon('calendar-range').setDisabled(!can.nextWeek).onClick(() => parkTo(card, nextDest(board))));
+      menu.addItem(i => i.setTitle('Later').setIcon('inbox').setDisabled(!can.later).onClick(() => parkTo(card, LATER)));
     }
     menu.showAtMouseEvent(e);
   }
@@ -198,9 +206,9 @@ function mountBoard(view) {
       });
     }
     const row = li.createEl('button', { cls: 'fn-row', attr: { type: 'button', title: `Open in ${card.path}` } });
-    row.addEventListener('click', () => plugin.openTask(card));
+    row.addEventListener('click', () => (isPhone() ? openSheet(card, board) : plugin.openTask(card)));
     byKey.set(card.key, card);
-    if (!card.done) makeDraggable(row, card, board);
+    if (!card.done && !isPhone()) makeDraggable(row, card, board);
     if (card.source === 'event') {
       /* A fixed appointment: time in front, a lock — it can't be dragged. */
       row.createSpan({ cls: card.time ? 'fn-evtime' : ['fn-evtime', 'is-allday'], text: card.time || 'All day' });
@@ -308,11 +316,14 @@ function mountBoard(view) {
       }
     }
     renderAdd(card, nextDest(board));
+    /* On a phone the Next tab always shows the days: no toggle. */
+    if (!isPhone()) {
     const toggle = card.createEl('button', {
       cls: 'fn-more', attr: { type: 'button', 'aria-expanded': String(nextOpen) },
       text: nextOpen ? 'Hide the days' : 'Show 7 days',
     });
     toggle.addEventListener('click', () => { nextOpen = !nextOpen; render(lastTasks, lastRhythm); });
+    }
     if (nextOpen) {
       for (const d of nw.days) {
         renderDay(boardEl, Object.assign({ past: false, isToday: false }, d), board);
@@ -343,6 +354,152 @@ function mountBoard(view) {
       for (const c of tagged) renderCard(list, c, board);
     }
     renderAdd(card, LATER);
+  }
+
+  /* ---- phone ------------------------------------------------------------ */
+
+  /* One day at a time: a row of thin numerals to switch, then Next and
+     Later; the chosen day as a single full-width column. */
+  function renderPhone(board) {
+    const open = board.days.filter(d => !d.past);
+    if (!phoneSel || (phoneSel !== 'nextWeek' && phoneSel !== 'later' && !open.some(d => d.date === phoneSel))) phoneSel = board.today;
+    const sw = main.createDiv({ cls: 'fn-switch', attr: { 'aria-label': 'Day' } });
+    const tab = (key, label, num, count) => {
+      const b = sw.createEl('button', { cls: ['fn-sw', phoneSel === key ? 'is-on' : ''], attr: phoneSel === key ? { type: 'button', 'aria-current': 'true' } : { type: 'button' } });
+      b.createSpan({ cls: 'fn-swl', text: label });
+      b.createSpan({ cls: 'fn-swn', text: num });
+      if (count) b.createSpan({ cls: 'fn-swc', text: String(count) });
+      b.addEventListener('click', () => { phoneSel = key; render(lastTasks, lastRhythm); });
+    };
+    for (const d of open) tab(d.date, d.isToday ? 'Today' : DOW[D.weekday(d.date)], dayNum(d.date), 0);
+    tab('nextWeek', 'Next', '›', board.nextWeek.count);
+    tab('later', 'Later', '…', board.later.length);
+    const body = main.createDiv({ cls: 'fn-pbody' });
+    if (phoneSel === 'nextWeek') {
+      const keep = nextOpen;
+      nextOpen = true;
+      renderNextWeek(body, board);
+      nextOpen = keep;
+    } else if (phoneSel === 'later') {
+      renderLater(body, board);
+    } else {
+      renderDay(body, open.find(d => d.date === phoneSel), board);
+    }
+    /* Centre the chosen day in the switcher — scrolling the switcher only,
+       never the pane (scrollIntoView would jump the whole view). */
+    const on = sw.querySelector('.is-on');
+    if (on) sw.scrollLeft = Math.max(0, on.offsetLeft - (sw.clientWidth - on.offsetWidth) / 2);
+  }
+
+  function closeSheet() {
+    if (!sheet) return;
+    sheet.layer.remove();
+    root.style.overflow = sheet.overflow;
+    document.removeEventListener('keydown', sheet.onKey, true);
+    const back = sheet.returnFocus;
+    sheet = null;
+    if (back && back.focus) back.focus();
+  }
+
+  /* The tap sheet: where should this card go? Big targets for the usual
+     answers, a 14-day picker for the rest, then Done / Open / Drop. What
+     doesn't apply to this kind of card is shown but disabled. */
+  function openSheet(card, board) {
+    closeSheet();
+    const today = board.today;
+    const tomorrow = D.addDays(today, 1);
+    const can = actionsFor(card, board);
+    const layer = root.createDiv({ cls: 'fn-sheet-layer' });
+    layer.style.top = `${root.scrollTop}px`;
+    layer.style.height = `${root.clientHeight}px`;
+    const back = layer.createDiv({ cls: 'fn-sheet-back' });
+    back.addEventListener('click', closeSheet);
+    const el = layer.createDiv({ cls: 'fn-sheet', attr: { role: 'dialog', 'aria-modal': 'true', 'aria-label': card.text } });
+    /* While open, the pane behind doesn't scroll (the sheet stays put), and
+       Tab / Escape are kept to the sheet. */
+    const onKey = e => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSheet(); return; }
+      if (e.key !== 'Tab') return;
+      const all = Array.from(el.querySelectorAll('button:not([disabled])'));
+      if (!all.length) return;
+      const first = all[0], last = all[all.length - 1];
+      if (!el.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    sheet = { layer, returnFocus: document.activeElement, overflow: root.style.overflow, onKey };
+    root.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKey, true);
+    el.createDiv({ cls: 'fn-sh-grab', attr: { 'aria-hidden': 'true' } });
+    el.createDiv({ cls: 'fn-sh-title', text: card.text || '(untitled)' });
+    const where = card.fromTray ? 'Practice · not placed yet'
+      : card.date ? `${card.date === today ? 'Today' : `${DOW[D.weekday(card.date)]} ${short(card.date)}`} · ${noteName(card.path)}`
+      : `${card.slot === 'nextWeek' ? 'Next week' : 'Later'} · ${noteName(card.path)}`;
+    el.createDiv({ cls: 'fn-sh-meta', text: where });
+
+    const act = fn => () => { closeSheet(); fn(); };
+    const button = (parent, cls, label, sub, disabled, onClick) => {
+      const b = parent.createEl('button', { cls, attr: { type: 'button' } });
+      b.createSpan({ cls: 'fn-sh-label', text: label });
+      if (sub) b.createSpan({ cls: 'fn-sh-sub', text: sub });
+      if (disabled) b.disabled = true;
+      else b.addEventListener('click', act(onClick));
+      return b;
+    };
+
+    const grid = el.createDiv({ cls: 'fn-sh-grid' });
+    const here = date => date === card.date && !card.fromTray;
+    button(grid, 'fn-sh-big', 'Today', `${DOW[D.weekday(today)]} ${dayNum(today)}`, !can.day || here(today), () => moveTo(card, today));
+    button(grid, 'fn-sh-big', 'Tomorrow', `${DOW[D.weekday(tomorrow)]} ${dayNum(tomorrow)}`, !can.day || here(tomorrow), () => moveTo(card, tomorrow));
+    button(grid, 'fn-sh-big', 'Next week', `from ${short(board.nextWeek.start)}`, !can.nextWeek, () => parkTo(card, nextDest(board)));
+    button(grid, 'fn-sh-big', 'Later', 'no date', !can.later, () => parkTo(card, LATER));
+
+    el.createDiv({ cls: 'fn-sh-h', text: 'Pick a day' });
+    const picker = el.createDiv({ cls: 'fn-picker' });
+    const days = board.days.filter(d => !d.past).map(d => d.date).concat(board.nextWeek.days.map(d => d.date)).slice(0, 14);
+    for (const date of days) {
+      const b = picker.createEl('button', { cls: ['fn-pk', date === card.date ? 'is-current' : '', date === today ? 'is-today' : ''], attr: { type: 'button', 'aria-label': `${DOW[D.weekday(date)]} ${short(date)}` } });
+      b.createSpan({ cls: 'fn-pk-dow', text: DOW[D.weekday(date)].slice(0, 2) });
+      b.createSpan({ cls: 'fn-pk-num', text: dayNum(date) });
+      if (!can.day || here(date)) b.disabled = true;
+      else b.addEventListener('click', act(() => moveTo(card, date)));
+    }
+
+    const list = el.createDiv({ cls: 'fn-sh-actions' });
+    button(list, 'fn-sh-row is-done', 'Done', '', !can.done, () => tickCard(card));
+    button(list, 'fn-sh-row', 'Open note', '', !card.path, () => plugin.openTask(card.fromTray ? { path: card.path, line: 0 } : card));
+    button(list, 'fn-sh-row is-drop', 'Drop', can.dropWhy === 'repeats' ? 'repeats — tick it instead' : '', !can.drop, () => dropCard(card));
+    button(list, 'fn-sh-row is-cancel', 'Cancel', '', false, () => {});
+
+    const first = el.querySelector('button:not([disabled])');
+    if (first) first.focus();
+  }
+
+  /* Drop: cancelled in its note, with Undo. */
+  async function dropCard(card) {
+    let r;
+    try { r = await plugin.store.drop(card); }
+    catch (e) { console.error('Fortnight: drop failed', e); r = { ok: false, reason: 'error' }; }
+    if (!r.ok) {
+      if (r.reason !== 'busy') new Notice(`Fortnight: couldn't drop "${card.text}": ${REASON[r.reason] || 'something went wrong (see the console)'}.`);
+    } else {
+      const frag = document.createDocumentFragment();
+      const msg = document.createElement('span');
+      msg.textContent = `Dropped "${card.text}". `;
+      const undo = document.createElement('button');
+      undo.textContent = 'Undo';
+      undo.className = 'mod-cta';
+      frag.append(msg, undo);
+      const notice = new Notice(frag, 8000);
+      undo.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        const back = await plugin.store.revert(card, r.after, r.before);
+        if (notice && notice.hide) notice.hide();
+        if (!back.ok) new Notice(`Fortnight: couldn't undo — the line changed in ${card.path}.`);
+        await refresh();
+      });
+    }
+    await refresh();
   }
 
   /* "+ Add a to-do": Enter writes it to the planner note with this day's ⏳. */
@@ -445,11 +602,12 @@ function mountBoard(view) {
       chip.createSpan({ cls: 'fn-grip', attr: { 'aria-hidden': 'true' } });
       chip.createSpan({ text: t.name });
       chip.createSpan({ cls: 'fn-chip-n', text: t.target > 1 ? `${t.need} of ${t.target} left` : 'to place' });
-      chip.addEventListener('click', () => plugin.openTask({ path: t.path, line: 0 }));
-      /* Drag a practice onto a day to promise it there, in Rhythm's log. */
+      /* Drag a practice onto a day to promise it there, in Rhythm's log —
+         or, on a phone, tap it and pick the day. */
       const pc = { key: `tray:${t.name}`, source: 'practice', fromTray: true, text: t.name, path: t.path };
       byKey.set(pc.key, pc);
-      makeDraggable(chip, pc, board);
+      chip.addEventListener('click', () => (isPhone() ? openSheet(pc, board) : plugin.openTask({ path: t.path, line: 0 })));
+      if (!isPhone()) makeDraggable(chip, pc, board);
     }
   }
 
@@ -465,6 +623,8 @@ function mountBoard(view) {
     const prev = main.querySelector('.fn-board');
     const scrollLeft = prev ? prev.scrollLeft : 0;
     main.empty();
+    wasPhone = isPhone();
+    root.toggleClass('is-phone', wasPhone);
     const top = main.createDiv({ cls: 'fn-top' });
     const title = top.createDiv({ cls: 'fn-titlebox' });
     title.createDiv({ cls: 'fn-kicker', text: board.weekStart > board.today ? 'Today, then the week' : 'This week' });
@@ -474,6 +634,7 @@ function mountBoard(view) {
       top.createSpan({ cls: 'fn-problem', text: 'Nudge reminders could not be read — they are missing from this board.' });
     }
     if (board.tray.length) renderTray(top, board);
+    if (wasPhone) { renderPhone(board); return; }
     const boardEl = main.createDiv({ cls: 'fn-board' });
     for (const day of board.days) renderDay(boardEl, day, board);
     renderNextWeek(boardEl, board);
@@ -583,9 +744,14 @@ function mountBoard(view) {
     }
   }
 
+  /* The pane was resized: redraw if it crossed the phone width. */
+  function relayout() {
+    if (lastBoard && isPhone() !== wasPhone) render(lastTasks, lastRhythm);
+  }
+
   return {
-    start, refresh, showIntro,
-    stop() { if (intro) intro.finish(); root.empty(); },
+    start, refresh, showIntro, relayout,
+    stop() { if (intro) intro.finish(); closeSheet(); root.empty(); },
   };
 }
 
