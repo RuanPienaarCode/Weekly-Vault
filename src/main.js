@@ -24,6 +24,10 @@ class FortnightPlugin extends Plugin {
     this.addRibbonIcon(ICON, 'Open Fortnight', () => this.activateView());
     this.addCommand({ id: 'open', name: 'Open Fortnight', callback: () => this.activateView() });
     this.addCommand({
+      id: 'review', name: 'Review today',
+      callback: async () => { await this.activateView(); for (const v of this.boardViews()) v.ctl.openReview(); },
+    });
+    this.addCommand({
       id: 'welcome', name: 'Show the welcome again',
       callback: async () => { await this.activateView(); for (const v of this.boardViews()) v.ctl.showIntro(); },
     });

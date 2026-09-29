@@ -445,5 +445,63 @@ const rhythm = { rhythm: { settings: {} } };
     assert.strictEqual(app.files.get('H.md'), '- [x] Called plumber ⏳ 2026-09-29 ✅ 2026-09-28');
   }
 
+  /* 18. the review is APPENDED to the day's log — nothing above it moves */
+  {
+    const parts = { done: ['Call plumber'], moved: [['Fix the gate', 'Tue 29 Sep']], dropped: [], left: 0, reflection: 'steady' };
+    const app = makeApp({ 'Rhythm/Log/2026-09-30.md': '---\nrhythm: log\ndone: [Gym]\n---\nWent well.' }, rhythm);
+    const store = makeStore({ app, settings: {} });
+    const r = await store.writeReview('2026-09-30', parts, '21:40');
+    assert.deepStrictEqual(r, { ok: true, path: 'Rhythm/Log/2026-09-30.md' });
+    assert.strictEqual(app.files.get('Rhythm/Log/2026-09-30.md'),
+      '---\nrhythm: log\ndone: [Gym]\n---\nWent well.\n\n## Review\n- Done: 1 — Call plumber\n- Moved: 1 — Fix the gate → Tue 29 Sep\n- Reflection: steady\n');
+    /* 18b. a second review the same evening gets its time in the heading */
+    await store.writeReview('2026-09-30', { done: [], moved: [], dropped: ['Book the vet'], left: 0, reflection: '' }, '22:05');
+    assert.ok(app.files.get('Rhythm/Log/2026-09-30.md').endsWith('- Reflection: steady\n\n## Review · 22:05\n- Dropped: 1 — Book the vet\n'));
+  }
+
+  /* 18c. no log note yet: created the way Rhythm would, then the review */
+  {
+    const app = makeApp({ 'Rhythm/Practices/Gym.md': 'x' }, rhythm);
+    await makeStore({ app, settings: {} }).writeReview('2026-09-30', { done: [], moved: [], dropped: [], left: 0, reflection: '' }, '21:00');
+    /* exactly as Rhythm creates a day's log (done: []) */
+    assert.strictEqual(app.files.get('Rhythm/Log/2026-09-30.md'), '---\nrhythm: log\ndone: []\n---\n\n## Review\n- Nothing left open.\n');
+  }
+
+  /* 18d. another folder (settings.reviewFolder): a plain note; a CRLF note
+          gets a CRLF review */
+  {
+    const app = makeApp({ 'Journal/2026-09-30.md': '# Tue\r\nMorning pages.\r\n' });
+    await makeStore({ app, settings: { reviewFolder: 'Journal' } }).writeReview('2026-09-30', { done: ['A'], moved: [], dropped: [], left: 2, reflection: '' }, '21:00');
+    assert.strictEqual(app.files.get('Journal/2026-09-30.md'), '# Tue\r\nMorning pages.\r\n\r\n## Review\r\n- Done: 1 — A\r\n- Left open: 2\r\n');
+    const empty = makeApp({});
+    await makeStore({ app: empty, settings: { reviewFolder: 'Journal/' } }).writeReview('2026-09-30', { done: [], moved: [], dropped: [], left: 0, reflection: '' }, '21:00');
+    assert.strictEqual(empty.files.get('Journal/2026-09-30.md'), '## Review\n- Nothing left open.\n');
+  }
+
+  /* 18e. the folder is tidied like every other path setting; a "folder"
+          that is really a note is refused BEFORE anything is written */
+  {
+    const app = makeApp({ 'Journal/2026-09-30.md': 'x' });
+    const store = makeStore({ app, settings: { reviewFolder: './Journal//' } });
+    assert.deepStrictEqual(await store.reviewTarget('2026-09-30'), { ok: true, path: 'Journal/2026-09-30.md', heading: '## Review' });
+    const bad = makeApp({ 'Journal/Day.md': 'x' });
+    assert.deepStrictEqual(await makeStore({ app: bad, settings: { reviewFolder: 'Journal/Day.md' } }).reviewTarget('2026-09-30'), { ok: false, reason: 'folder-is-note' });
+    /* the heading the preview shows is the heading that gets written */
+    const twice = makeApp({ 'Journal/2026-09-30.md': '## Review\n- Nothing left open.\n' });
+    assert.deepStrictEqual(await makeStore({ app: twice, settings: { reviewFolder: 'Journal' } }).reviewTarget('2026-09-30', '22:05'), { ok: true, path: 'Journal/2026-09-30.md', heading: '## Review · 22:05' });
+  }
+
+  /* 19. a line that only SHIFTED (a 🔁 tick inserted its next occurrence
+         above it, or a sync added a line) is still found — when it is the
+         one identical line in the note; two identical lines stay refused */
+  {
+    const app = makeApp({ 'H.md': '- [ ] New occurrence\n- [ ] A 🔁 every day\n- [ ] B ⏳ 2026-09-30' });
+    const store = makeStore({ app, settings: {} });
+    assert.deepStrictEqual(await store.move({ source: 'tasks', path: 'H.md', line: 1, raw: '- [ ] B ⏳ 2026-09-30' }, '2026-10-01'), { ok: true });
+    assert.strictEqual(app.files.get('H.md'), '- [ ] New occurrence\n- [ ] A 🔁 every day\n- [ ] B ⏳ 2026-10-01');
+    const dup = makeApp({ 'D.md': '- [ ] same\nx\n- [ ] same' });
+    assert.deepStrictEqual(await makeStore({ app: dup, settings: {} }).move({ source: 'tasks', path: 'D.md', line: 1, raw: '- [ ] same' }, '2026-10-01'), { ok: false, reason: 'changed' });
+  }
+
   console.log('store-write OK');
 })().catch(e => { console.error(e); process.exit(1); });

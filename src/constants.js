@@ -18,6 +18,8 @@ const DEFAULT_SETTINGS = {
   laterTag: '#later',
   /* Where new to-dos from quick-add go, under an "## Inbox" heading. */
   plannerNote: 'Planning/Fortnight.md',
+  /* Where the evening review is written; '' = Rhythm's log (or Reviews). */
+  reviewFolder: '',
   /* The daily welcome: greeting (with a name, if set), then "Plan the week"
      or "Plan today", fading into the board. lastWelcome is the day it last
      showed, so it shows once a day. */

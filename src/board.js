@@ -5,6 +5,7 @@
 const { setIcon, Menu, Notice, Platform } = require('obsidian');
 const { planBoard, actionsFor } = require('./plan');
 const { introScreens, shouldShowIntro } = require('./intro');
+const { reviewCards, reviewText } = require('./review');
 const D = require('./dates');
 
 const { DOW, dayNum, short } = D;
@@ -395,7 +396,6 @@ function mountBoard(view) {
     if (!sheet) return;
     sheet.layer.remove();
     root.style.overflow = sheet.overflow;
-    document.removeEventListener('keydown', sheet.onKey, true);
     const back = sheet.returnFocus;
     sheet = null;
     if (back && back.focus) back.focus();
@@ -429,7 +429,8 @@ function mountBoard(view) {
     };
     sheet = { layer, returnFocus: document.activeElement, overflow: root.style.overflow, onKey };
     root.style.overflow = 'hidden';
-    document.addEventListener('keydown', onKey, true);
+    /* Keys only while focus is inside the sheet — never Obsidian-wide. */
+    layer.addEventListener('keydown', onKey);
     el.createDiv({ cls: 'fn-sh-grab', attr: { 'aria-hidden': 'true' } });
     el.createDiv({ cls: 'fn-sh-title', text: card.text || '(untitled)' });
     const where = card.fromTray ? 'Practice · not placed yet'
@@ -473,6 +474,204 @@ function mountBoard(view) {
 
     const first = el.querySelector('button:not([disabled])');
     if (first) first.focus();
+  }
+
+  /* ---- Review today ------------------------------------------------------ */
+
+  /* A full-pane panel over the board: each of today's open cards in turn,
+     then a summary with a reflection and the exact text to be written.
+     Nothing is written until Finish; Cancel leaves everything as it was. */
+  let review = null;
+
+  function closeReview() {
+    if (!review) return;
+    review.layer.remove();
+    root.style.overflow = review.overflow;
+    review = null;
+  }
+
+  function openReview() {
+    if (!lastBoard || review) return;
+    closeSheet();
+    const board = lastBoard;
+    const cards = reviewCards(board);
+    const todayDay = board.days.find(d => d.date === board.today);
+    const alreadyDone = todayDay ? todayDay.done.map(c => c.text) : [];
+    const choices = new Map();
+    let step = 0;
+    let reflection = '';
+    /* Where it will be written, with the exact heading — asked now, so the
+       preview is the text and a bad folder shows before anything changes. */
+    const now = new Date();
+    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    let target = { ok: true, heading: '## Review', path: '' };
+    plugin.store.reviewTarget(board.today, time).then(t => { target = t; if (review && step >= cards.length) draw(); });
+    const layer = root.createDiv({ cls: 'fn-review', attr: { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Review today' } });
+    layer.style.top = `${root.scrollTop}px`;
+    layer.style.height = `${root.clientHeight}px`;
+    const inner = layer.createDiv({ cls: 'fn-rv-inner' });
+    const onKey = e => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeReview(); return; }
+      if (e.key !== 'Tab') return;
+      const all = Array.from(layer.querySelectorAll('button:not([disabled]), input'));
+      if (!all.length) return;
+      const first = all[0], last = all[all.length - 1];
+      if (!layer.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    review = { layer, overflow: root.style.overflow, onKey };
+    root.style.overflow = 'hidden';
+    /* Keys only while focus is inside the review: Escape elsewhere in
+       Obsidian must never throw away the choices made so far. */
+    layer.addEventListener('keydown', onKey);
+
+    const whereLabel = c => (c.kind === 'day' ? (c.date === D.addDays(board.today, 1) ? 'tomorrow' : `${DOW[D.weekday(c.date)]} ${short(c.date)}`)
+      : c.kind === 'nextWeek' ? 'next week' : 'Later');
+    /* What the choices add up to, as reviewText parts (before writing). */
+    const parts = () => {
+      const p = { done: alreadyDone.slice(), moved: [], dropped: [], left: 0, reflection };
+      for (const card of cards) {
+        const c = choices.get(card.key) || { kind: 'leave' };
+        if (c.kind === 'done') p.done.push(card.text);
+        else if (c.kind === 'drop') p.dropped.push(card.text);
+        else if (c.kind === 'leave') p.left++;
+        else p.moved.push([card.text, whereLabel(c)]);
+      }
+      return p;
+    };
+
+    const draw = () => {
+      inner.empty();
+      const head = inner.createDiv({ cls: 'fn-rv-head' });
+      head.createSpan({ cls: 'fn-rv-kicker', text: 'Review today' });
+      const cancel = head.createEl('button', { cls: 'fn-rv-cancel', attr: { type: 'button' }, text: 'Cancel' });
+      cancel.addEventListener('click', closeReview);
+      if (step < cards.length) drawCard(cards[step]);
+      else drawSummary();
+      const first = inner.querySelector('.fn-sh-big:not([disabled]), input, button.fn-rv-finish');
+      if (first) first.focus();
+    };
+
+    const choose = (card, c) => { choices.set(card.key, c); step++; draw(); };
+
+    const drawCard = card => {
+      inner.createDiv({ cls: 'fn-rv-prog', text: `${step + 1} of ${cards.length}` });
+      const bar = inner.createDiv({ cls: 'fn-rv-bar' });
+      bar.createDiv({ cls: 'fn-rv-fill' }).style.width = `${(step / cards.length) * 100}%`;
+      inner.createDiv({ cls: 'fn-sh-title', text: card.text || '(untitled)' });
+      inner.createDiv({ cls: 'fn-sh-meta', text: `${card.date && card.date < board.today ? `Slipped from ${short(card.date)}` : 'Today'} · ${card.source === 'nudge' ? 'Nudge' : noteName(card.path)}` });
+      const can = actionsFor(card, board);
+      const btn = (parent, cls, label, sub, ok, c) => {
+        const b = parent.createEl('button', { cls, attr: { type: 'button' } });
+        b.createSpan({ cls: 'fn-sh-label', text: label });
+        if (sub) b.createSpan({ cls: 'fn-sh-sub', text: sub });
+        if (!ok) b.disabled = true;
+        else b.addEventListener('click', () => choose(card, c));
+        return b;
+      };
+      const tomorrow = D.addDays(board.today, 1);
+      const grid = inner.createDiv({ cls: 'fn-sh-grid' });
+      btn(grid, 'fn-sh-big', 'Done', 'it happened', can.done, { kind: 'done' });
+      btn(grid, 'fn-sh-big', 'Tomorrow', `${DOW[D.weekday(tomorrow)]} ${dayNum(tomorrow)}`, can.day, { kind: 'day', date: tomorrow });
+      btn(grid, 'fn-sh-big', 'Next week', `from ${short(board.nextWeek.start)}`, can.nextWeek, { kind: 'nextWeek' });
+      btn(grid, 'fn-sh-big', 'Later', 'no date', can.later, { kind: 'later' });
+      inner.createDiv({ cls: 'fn-sh-h', text: 'Pick a day' });
+      const picker = inner.createDiv({ cls: 'fn-picker' });
+      const days = board.days.filter(d => d.date > board.today).map(d => d.date).concat(board.nextWeek.days.map(d => d.date)).slice(0, 14);
+      for (const date of days) {
+        const b = picker.createEl('button', { cls: 'fn-pk', attr: { type: 'button', 'aria-label': `${DOW[D.weekday(date)]} ${short(date)}` } });
+        b.createSpan({ cls: 'fn-pk-dow', text: DOW[D.weekday(date)].slice(0, 2) });
+        b.createSpan({ cls: 'fn-pk-num', text: dayNum(date) });
+        if (!can.day) b.disabled = true;
+        else b.addEventListener('click', () => choose(card, { kind: 'day', date }));
+      }
+      const rows = inner.createDiv({ cls: 'fn-sh-actions' });
+      btn(rows, 'fn-sh-row is-drop', 'Drop', can.dropWhy === 'repeats' ? 'repeats — tick it instead' : '', can.drop, { kind: 'drop' });
+      btn(rows, 'fn-sh-row', 'Leave it', 'stays open, slips tomorrow', true, { kind: 'leave' });
+      if (step > 0) {
+        const back = rows.createEl('button', { cls: 'fn-sh-row is-cancel', attr: { type: 'button' }, text: 'Back' });
+        back.addEventListener('click', () => { step--; draw(); });
+      }
+    };
+
+    const drawSummary = () => {
+      const p = parts();
+      inner.createDiv({ cls: ['fn-intro-title', 'is-big'], text: cards.length ? 'That’s the day' : 'Nothing left open' });
+      const stats = inner.createDiv({ cls: 'fn-stats' });
+      for (const [n, label, slip] of [[p.done.length, 'done', false], [p.moved.length, 'moved', false], [p.dropped.length, 'dropped', true], [p.left, 'left open', false]]) {
+        const f = stats.createDiv({ cls: slip && n ? ['fn-stat', 'is-slip'] : 'fn-stat' });
+        f.createSpan({ cls: 'fn-snum', text: String(n) });
+        f.createSpan({ cls: 'fn-slabel', text: label });
+      }
+      inner.createDiv({ cls: 'fn-sh-h', text: 'One line about today (optional)' });
+      const input = inner.createEl('input', { cls: 'fn-rv-input', attr: { type: 'text', placeholder: 'What went well, what didn’t…', 'aria-label': 'Reflection', maxlength: '300' } });
+      input.value = reflection;
+      if (!target.ok) {
+        inner.createDiv({ cls: 'fn-rv-error', text: 'The review folder in Fortnight’s settings names a note, not a folder. Fix it there — nothing has been changed.' });
+      }
+      inner.createDiv({ cls: 'fn-sh-h', text: target.path ? `Will be added to ${target.path}` : 'Will be added to today’s log' });
+      const pre = inner.createEl('pre', { cls: 'fn-rv-preview' });
+      const show = () => { pre.setText(reviewText(Object.assign({ heading: target.heading || '## Review' }, parts()))); };
+      input.addEventListener('input', () => { reflection = input.value; show(); });
+      show();
+      const rows = inner.createDiv({ cls: 'fn-rv-actions' });
+      if (cards.length) {
+        const back = rows.createEl('button', { cls: 'fn-rv-back', attr: { type: 'button' }, text: 'Back' });
+        back.addEventListener('click', () => { step--; draw(); });
+      }
+      const finish = rows.createEl('button', { cls: ['fn-rv-finish', 'mod-cta'], attr: { type: 'button' }, text: 'Finish review' });
+      if (!target.ok) finish.disabled = true;
+      finish.addEventListener('click', async () => {
+        finish.disabled = true;
+        finish.setText('Writing…');
+        await finishReview(board, cards, choices, alreadyDone, reflection, whereLabel, time, target.heading);
+      });
+    };
+
+    draw();
+  }
+
+  /* Apply each choice through the store (so every write keeps its usual
+     guards), then write what ACTUALLY happened — a refused move counts as
+     left open, and says so. */
+  async function finishReview(board, cards, choices, alreadyDone, reflection, whereLabel, time, heading) {
+    const p = { done: alreadyDone.slice(), moved: [], dropped: [], left: 0, reflection };
+    const failed = [];
+    /* Bottom of each note first: ticking a 🔁 to-do inserts its next
+       occurrence above it, which would shift every card below. The text
+       keeps the order you reviewed in. */
+    const order = cards.slice().sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : (b.line || 0) - (a.line || 0)));
+    const outcome = new Map();
+    for (const card of order) {
+      const c = choices.get(card.key) || { kind: 'leave' };
+      let r = { ok: true };
+      try {
+        if (c.kind === 'done') r = await plugin.store.tick(card, board.today);
+        else if (c.kind === 'day') r = await plugin.store.move(card, c.date);
+        else if (c.kind === 'nextWeek') r = await plugin.store.park(card, 'nextWeek', board.nextWeek.start);
+        else if (c.kind === 'later') r = await plugin.store.park(card, 'later');
+        else if (c.kind === 'drop') r = await plugin.store.drop(card);
+      } catch (e) { console.error('Fortnight: review step failed', e); r = { ok: false, reason: 'error' }; }
+      outcome.set(card.key, r);
+    }
+    for (const card of cards) {
+      const c = choices.get(card.key) || { kind: 'leave' };
+      const r = outcome.get(card.key);
+      if (!r.ok) { failed.push(card.text); p.left++; continue; }
+      if (c.kind === 'done') p.done.push(card.text);
+      else if (c.kind === 'drop') p.dropped.push(card.text);
+      else if (c.kind === 'leave') p.left++;
+      else p.moved.push([card.text, whereLabel(c)]);
+    }
+    let w;
+    try { w = await plugin.store.writeReview(board.today, p, time, heading); }
+    catch (e) { console.error('Fortnight: review write failed', e); w = { ok: false }; }
+    closeReview();
+    const stayed = failed.length ? ` ${failed.length} couldn't be changed and stay open (they were edited meanwhile, or no longer match): ${failed.join(', ')}.` : '';
+    if (w.ok) new Notice(`Fortnight: review added to ${w.path}.${stayed}`, 10000);
+    else new Notice(`Fortnight: couldn't write the review (see the console). Your other choices were applied.${stayed}`, 10000);
+    await refresh();
   }
 
   /* Drop: cancelled in its note, with Undo. */
@@ -633,6 +832,8 @@ function mountBoard(view) {
     if (plugin.store.problems().includes('nudge')) {
       top.createSpan({ cls: 'fn-problem', text: 'Nudge reminders could not be read — they are missing from this board.' });
     }
+    const rb = top.createEl('button', { cls: 'fn-reviewbtn', attr: { type: 'button' }, text: 'Review today' });
+    rb.addEventListener('click', () => openReview());
     if (board.tray.length) renderTray(top, board);
     if (wasPhone) { renderPhone(board); return; }
     const boardEl = main.createDiv({ cls: 'fn-board' });
@@ -750,8 +951,8 @@ function mountBoard(view) {
   }
 
   return {
-    start, refresh, showIntro, relayout,
-    stop() { if (intro) intro.finish(); closeSheet(); root.empty(); },
+    start, refresh, showIntro, relayout, openReview,
+    stop() { if (intro) intro.finish(); closeSheet(); closeReview(); root.empty(); },
   };
 }
 

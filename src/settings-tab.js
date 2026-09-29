@@ -56,6 +56,13 @@ class FortnightSettingTab extends PluginSettingTab {
     const warning = containerEl.createDiv({ cls: 'setting-item-description mod-warning' });
     this.warnIfHidden(warning);
     new Setting(containerEl)
+      .setName('Review folder')
+      .setDesc('Where "Review today" adds its summary, as a note per day (YYYY-MM-DD). Leave blank for Rhythm\'s log folder (or "Reviews" without Rhythm).')
+      .addText(t => t
+        .setPlaceholder('Rhythm/Log')
+        .setValue(this.plugin.settings.reviewFolder || '')
+        .onChange(async v => { this.plugin.settings.reviewFolder = v.trim(); await this.plugin.saveSettings(); }));
+    new Setting(containerEl)
       .setName('Later: also show undated to-dos from')
       .setDesc('Later always shows the planner note\'s undated to-dos. Add folders here to include theirs too. One folder per line.')
       .addTextArea(t => t

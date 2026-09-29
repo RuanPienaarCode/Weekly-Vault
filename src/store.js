@@ -6,6 +6,7 @@
 const { parseFrontmatter, patchFrontmatter, buildNote } = require('./rhythm/markdown');
 const L = require('./tasks-line');
 const { plannerPathOf } = require('./plan');
+const { reviewText } = require('./review');
 const D = require('./dates');
 const RD = require('./rhythm/dates');
 
@@ -147,7 +148,18 @@ function makeStore(plugin) {
        line's own \r; fn is given and returns lines without it. */
     await app.vault.process(file, text => {
       const lines = text.split('\n');
-      if (lines[card.line] !== card.raw) return text;
+      /* Not where the board saw it? A line that merely SHIFTED (a 🔁 tick
+         inserted its next occurrence above, or sync added a line) is still
+         this card — if it is the one identical line in the note. Two
+         identical lines, or none: refuse rather than guess. */
+      let at = card.line;
+      if (lines[at] !== card.raw) {
+        const same = [];
+        lines.forEach((l, i) => { if (l === card.raw) same.push(i); });
+        if (same.length !== 1) return text;
+        at = same[0];
+      }
+      card = Object.assign({}, card, { line: at });
       const cr = card.raw.endsWith('\r') ? '\r' : '';
       const bare = cr ? card.raw.slice(0, -1) : card.raw;
       lines[card.line] = fn(bare).split('\n').map(l => l + cr).join('\n');
@@ -254,6 +266,59 @@ function makeStore(plugin) {
       await app.vault.process(now, insert);
     }
     return { ok: true };
+  }
+
+  /* The evening review, APPENDED to the day's note — nothing above it is
+     touched. The folder: settings.reviewFolder, else Rhythm's log (when
+     Rhythm is on), else "Reviews". A second review the same day gets its
+     time in the heading. The note keeps its own line endings. */
+  /* Where today's review goes, and the heading it will have — asked
+     BEFORE anything is changed, so the preview shows the exact text and a
+     bad folder is caught while nothing has been written. */
+  const tidyFolder = v => String(v || '').trim().replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^(\.\/|\/)+/, '').replace(/\/+$/, '');
+  function reviewFolderOf() {
+    const rr = rhythmRoot();
+    const own = tidyFolder(plugin.settings.reviewFolder);
+    return { folder: own || (rr ? `${rr.root}/${RHYTHM_FOLDERS.log}` : 'Reviews'), isRhythmLog: !own && !!rr };
+  }
+  const headingFor = (text, time) => (/^## Review\b/m.test(text || '') ? `## Review · ${time}` : '## Review');
+  async function reviewTarget(date, time) {
+    const { folder } = reviewFolderOf();
+    if (app.vault.getFileByPath(folder)) return { ok: false, reason: 'folder-is-note' };
+    const path = `${folder}/${date}.md`;
+    const f = app.vault.getFileByPath(path);
+    return { ok: true, path, heading: headingFor(f ? await app.vault.cachedRead(f) : '', time) };
+  }
+
+  async function writeReview(date, parts, time, fixedHeading) {
+    const { folder, isRhythmLog } = reviewFolderOf();
+    if (app.vault.getFileByPath(folder)) return { ok: false, reason: 'folder-is-note' };
+    const path = `${folder}/${date}.md`;
+    const append = text => {
+      const eol = /\r\n/.test(text) ? '\r\n' : '\n';
+      const heading = fixedHeading || headingFor(text, time);
+      const block = reviewText(Object.assign({ heading }, parts)).replace(/\n/g, eol);
+      const lead = !text ? '' : text.endsWith(eol) ? eol : eol + eol;
+      return text + lead + block;
+    };
+    const file = app.vault.getFileByPath(path);
+    if (file) { await app.vault.process(file, append); return { ok: true, path }; }
+    const parts2 = folder.split('/');
+    for (let i = 1; i <= parts2.length; i++) {
+      const dir = parts2.slice(0, i).join('/');
+      if (!app.vault.getFolderByPath(dir)) await app.vault.createFolder(dir);
+    }
+    /* A new Rhythm log starts exactly as Rhythm starts one (done: []). */
+    const start = isRhythmLog ? patchFrontmatter(buildNote({ rhythm: 'log' }, ''), { done: [] }) : '';
+    try {
+      await app.vault.create(path, append(start));
+    } catch (e) {
+      /* Lost a race (Rhythm made the day's log meanwhile): append to it. */
+      const now = app.vault.getFileByPath(path);
+      if (!now) throw e;
+      await app.vault.process(now, append);
+    }
+    return { ok: true, path };
   }
 
   async function doneOn(date, name) {
@@ -404,7 +469,7 @@ function makeStore(plugin) {
     return { ok: false, reason: 'unknown' };
   }
 
-  return { load, loadRhythm, move, park, revert, drop, tick, add, plannerPath, problems: () => problems.slice() };
+  return { load, loadRhythm, move, park, revert, drop, tick, add, reviewTarget, writeReview, plannerPath, problems: () => problems.slice() };
 }
 
 module.exports = { makeStore };

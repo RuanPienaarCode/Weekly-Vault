@@ -186,7 +186,7 @@ Ruan's own plugins come first. Nudge and Rhythm cards now appear straight after 
   - Out: swipe gestures.
   - Blocked by: #6, #7
 
-- [ ] **#14 Review today**
+- [x] **#14 Review today** — done 29 Sep 2026; nothing is written until Finish, and the preview is the exact text
   - AC:
     - Steps through each unfinished card for today with tomorrow / pick a day / Later / drop.
     - Offers an optional one-line reflection.

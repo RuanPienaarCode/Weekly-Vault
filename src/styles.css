@@ -605,3 +605,85 @@
 .fortnight button.fn-sh-row.is-cancel { color: var(--fn-muted); border-bottom: 0; }
 /* Chips are tapped on a phone: full 44px targets. */
 .fortnight.is-phone button.fn-chip { height: 44px; }
+
+/* ---- Review today ------------------------------------------------------- */
+.fortnight button.fn-reviewbtn {
+  height: 36px;
+  margin: 0;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--fn-ring);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.fortnight button.fn-reviewbtn:hover,
+.fortnight button.fn-reviewbtn:focus-visible { background: var(--fn-hover); }
+.fortnight.is-phone button.fn-reviewbtn { height: 44px; }
+.fortnight .fn-review {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 100%;
+  z-index: 7;
+  overflow-y: auto;
+  background-color: var(--fn-paper);
+  background-image:
+    radial-gradient(60% 45% at 6% 0%, hsla(var(--fn-hsl), .16), hsla(var(--fn-hsl), 0) 70%),
+    radial-gradient(55% 45% at 100% 100%, rgba(var(--fn-orgb), .10), rgba(var(--fn-orgb), 0) 70%);
+}
+.fortnight .fn-rv-inner { max-width: 560px; margin: 0 auto; padding: 20px 20px 40px; }
+.fortnight .fn-rv-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.fortnight .fn-rv-kicker { font-size: 13px; font-weight: 600; color: var(--fn-muted); }
+.fortnight button.fn-rv-cancel,
+.fortnight button.fn-rv-back {
+  min-height: 44px;
+  height: auto;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--fn-muted);
+  font-size: 15px;
+  cursor: pointer;
+}
+.fortnight .fn-rv-prog { font-size: 13px; font-weight: 500; color: var(--fn-muted); font-variant-numeric: tabular-nums; }
+.fortnight .fn-rv-bar { height: 2px; margin: 8px 0 22px; background: var(--fn-hair); }
+.fortnight .fn-rv-fill { height: 2px; background: var(--fn-accent); transition: width .2s ease; }
+.fortnight input.fn-rv-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--fn-ring);
+  color: var(--fn-ink);
+  font: inherit;
+  font-size: 15px;
+}
+.fortnight input.fn-rv-input:focus { box-shadow: inset 0 0 0 1.5px var(--fn-accent); outline: none; }
+.fortnight pre.fn-rv-preview {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--fn-hair);
+  background: var(--fn-hover);
+  font-family: var(--font-monospace, ui-monospace, "SF Mono", Menlo, monospace);
+  font-size: 12.5px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fortnight .fn-rv-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 20px; }
+.fortnight button.fn-rv-finish { min-height: 44px; padding: 0 20px; border-radius: 999px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.fortnight .fn-review .fn-intro-title.is-big { margin-bottom: 20px; }
+@media (max-width: 640px) {
+  .fortnight .fn-review .fn-intro-title.is-big { font-size: 34px; line-height: 40px; }
+  .fortnight .fn-review .fn-snum { font-size: 40px; line-height: 44px; }
+}
+.fortnight .fn-rv-error { margin-top: 14px; padding: 10px 12px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--fn-slip-rule); color: var(--fn-slip); font-size: 13px; }
