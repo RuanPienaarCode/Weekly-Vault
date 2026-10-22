@@ -18,6 +18,9 @@ class FortnightView extends ItemView {
 
   async onOpen() {
     this.ctl = mountBoard(this);
+    /* A new theme or accent colour: the board follows without a reload. */
+    const ws = this.app && this.app.workspace;
+    if (ws && typeof ws.on === 'function') this.registerEvent(ws.on('css-change', () => { if (this.ctl) this.ctl.restyle(); }));
     await this.ctl.start();
   }
 

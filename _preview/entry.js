@@ -1,6 +1,8 @@
 /* Harness entry: mounts the REAL view (src/view.js) over an in-memory vault
    of generic sample notes, dated around today, through the REAL store.
-     ?theme=light   ?mobile=1   ?empty=1   ?nonudge=1   ?nowelcome=1   ?name=Sam */
+     ?theme=light   ?mobile=1   ?empty=1   ?nonudge=1   ?nowelcome=1   ?name=Sam
+     ?accent=theme  follow the host's accent (Settings → Appearance)
+     ?hostaccent=a882ff  the host's accent colour (Obsidian's default is a pale purple) */
 const { FortnightView } = require('../src/view');
 const { makeStore } = require('../src/store');
 const { DEFAULT_SETTINGS } = require('../src/constants');
@@ -10,6 +12,12 @@ const { makeApp } = require('../tests/_stub.cjs');
 const q = new URLSearchParams(location.search);
 if (q.get('mobile') === '1') document.body.classList.add('is-mobile');
 if (q.get('theme') === 'light') { document.body.classList.remove('theme-dark'); document.body.classList.add('theme-light'); }
+
+/* The host's accent, as Obsidian declares it (hsl pieces joined by var()). */
+if (q.get('hostaccent')) {
+  const hex = q.get('hostaccent').replace('#', '');
+  document.body.style.setProperty('--interactive-accent', `#${hex}`);
+}
 
 const T = D.todayISO();
 const d = n => D.addDays(T, n);
@@ -68,12 +76,18 @@ const nudgeStore = {
 const plugins = { rhythm: { settings: {} } };
 if (q.get('nonudge') !== '1') plugins['nudge-reminders'] = { store: nudgeStore };
 const app = makeApp(files, plugins);
-app.workspace = { getLeaf: () => ({ openFile: async (f, o) => alert(`Would open ${f.path} at line ${o.eState.line + 1}`) }) };
+/* The workspace events the view listens for: window.__fn.fire('css-change'). */
+const handlers = {};
+app.workspace = {
+  getLeaf: () => ({ openFile: async (f, o) => alert(`Would open ${f.path} at line ${o.eState.line + 1}`) }),
+  on: (name, cb) => { (handlers[name] = handlers[name] || []).push(cb); return { name, cb }; },
+};
 
 const plugin = { app, settings: Object.assign({}, DEFAULT_SETTINGS, { excludeFolders: ['Templates'], name: q.get('name') || '' }), async saveData() {} };
 if (q.get('nowelcome') === '1') plugin.settings.showWelcome = false;
+if (q.get('accent') === 'theme') plugin.settings.accent = 'theme';
 plugin.store = makeStore(plugin);
 plugin.openTask = async card => app.workspace.getLeaf().openFile(app.vault.getFileByPath(card.path), { eState: { line: card.line } });
-const view = new FortnightView({ contentEl: document.getElementById('app') }, plugin);
-window.__fn = { view, plugin, app };
+const view = new FortnightView({ contentEl: document.getElementById('app'), app }, plugin);
+window.__fn = { view, plugin, app, fire: name => (handlers[name] || []).forEach(cb => cb()) };
 view.onOpen();

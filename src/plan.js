@@ -16,31 +16,58 @@ function boardWeek(today, weekStart) {
   return D.weekStart(tomorrow, weekStart) === tomorrow ? tomorrow : D.weekStart(today, weekStart);
 }
 
+/* Reading a line is the hot path (every task, every refresh), and a refresh
+   mostly sees the same lines as the last one. So a parse is kept by its raw
+   text across boards: two generations, so only lines that are still on the
+   board stay held. Parsed tasks are SHARED — read, never written; a card
+   gets its own copy of anything it could be handed to change (tags). */
+let parsedNow = new Map(), parsedBefore = new Map();
+function parse(raw) {
+  let t = parsedNow.get(raw);
+  if (t !== undefined) return t;
+  t = parsedBefore.get(raw);
+  if (t === undefined) t = L.parseTask(raw);
+  parsedNow.set(raw, t);
+  return t;
+}
+function startParseGeneration() { parsedBefore = parsedNow; parsedNow = new Map(); }
+
+/* What to call a card whose description is empty — a line that is only tags
+   ("- [ ] #errand ⏳ …") is named by them, not shown blank. */
+const nameOf = (text, tags) => text || (tags || []).join(' ');
+
 /* A card's day: its ⏳ scheduled date; failing that, its 📅 due date, shown
    as a deadline so it can't hide. */
 /* A done card shows on the day it was planned for (⏳, else 📅) — unless
    that day has gone, when it shows on the day it was done: a slipped card
-   ticked today lands in today's Done, not on a collapsed past day. */
+   ticked today lands in today's Done, not on a collapsed past day. A planned
+   day that isn't on the calendar counts as gone. */
 function doneDay(planned, doneDate, today) {
-  if (planned && planned >= today) return planned;
+  if (planned && D.isDate(planned) && planned >= today) return planned;
   return doneDate || planned;
 }
 
-function cardFor(task, today) {
+/* Parked is exactly what Fortnight's Next week writes: a deadline that has
+   already passed, pushed behind a 🛫 on a later week's Monday (nwStart and
+   beyond), with no ⏳. It waits in Next week, not in Slipped, until its week
+   comes. A deadline still ahead is never hidden behind its 🛫 — it sits on
+   its day. */
+function isParked(t, today, nwStart) {
+  return !t.done && !t.scheduled && !!t.start && t.start >= nwStart && !!t.due && t.due < today;
+}
+
+function cardFor(task, today, nwStart) {
   if (task.source === 'nudge') return reminderCard(task, today);
-  const t = L.parseTask(task.raw);
+  const t = parse(task.raw);
   if (!t || t.cancelled) return null;
-  /* Parked: a 🛫 ("not before") still to come, no ⏳, and any 📅 already
-     behind it (an overdue deadline pushed to next week). It waits in Next
-     week, not in Slipped, until its week comes. */
-  if (!t.done && !t.scheduled && t.start && t.start > today && (!t.due || t.due < t.start)) return null;
+  if (isParked(t, today, nwStart)) return null;
   const date = t.done ? doneDay(t.scheduled || t.due, t.doneDate, today) : (t.scheduled || t.due);
   if (!date) return null;
   return {
     key: `${task.path}:${task.line}`, source: 'tasks', path: task.path, line: task.line, raw: task.raw,
-    text: t.text, scheduled: t.scheduled, due: t.due, time: '',
-    deadlineOnly: !t.scheduled, priority: t.priority, tags: t.tags,
-    done: t.done, date,
+    text: nameOf(t.text, t.tags), scheduled: t.scheduled, due: t.due, time: '',
+    deadlineOnly: !t.scheduled, priority: t.priority, tags: t.tags.slice(),
+    done: t.done, doneDate: t.done ? t.doneDate : '', date, unique: task.unique === true,
   };
 }
 
@@ -52,41 +79,52 @@ function reminderCard(r, today) {
   if (!date) return null;
   return {
     key: `${r.path}:${r.line}`, source: 'nudge', path: r.path, line: r.line, raw: r.raw,
-    text: r.text, scheduled: r.scheduled || '', due: r.due, time: r.time || '',
-    deadlineOnly: false, priority: r.priority || 'normal', tags: r.tags || [], group: r.group || '',
-    done: !!r.done, date,
+    text: nameOf(r.text, r.tags), scheduled: r.scheduled || '', due: r.due, time: r.time || '',
+    deadlineOnly: false, priority: r.priority || 'normal', tags: (r.tags || []).slice(), group: r.group || '',
+    done: !!r.done, doneDate: r.done ? (r.doneDate || '') : '', date,
   };
 }
 
 /* The planner note's path, tidied — ONE reading shared by the board and the
    store: one kind of slash, no "./" or leading "/", ".md" added (a path
    without it is a file Obsidian never lists as a note). */
+let plannerKey, plannerVal;
 function plannerPathOf(settings) {
-  let p = String((settings && settings.plannerNote) || 'Planning/Fortnight.md').trim()
+  /* Read once per setting VALUE: the board asks per undated card. */
+  const setting = settings && settings.plannerNote;
+  if (plannerVal !== undefined && setting === plannerKey) return plannerVal;
+  let p = String(setting || 'Planning/Fortnight.md').trim()
     .replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^(\.\/|\/)+/, '');
   if (!p || p.endsWith('/')) p += 'Fortnight.md';
-  return /\.md$/i.test(p) ? p : `${p}.md`;
+  plannerKey = setting;
+  plannerVal = /\.md$/i.test(p) ? p : `${p}.md`;
+  return plannerVal;
 }
 
 /* An open line with no day (no ⏳, no 📅): parked in Next week if its 🛫 is
    in a week still to come; in Later if its 🛫 week has come without a day
    (never lost), or if it is undated and lives in the planner note or an
    included folder. Anything else undated stays off the board. */
-function undatedCard(task, nextWeekStart, settings) {
+function undatedCard(task, today, nextWeekStart, planner, settings) {
   if (task.source === 'nudge') return null;
-  const t = L.parseTask(task.raw);
-  /* A 📅 only when it is behind the 🛫 (see cardFor): parked past it. */
-  if (!L.isOpen(t) || t.scheduled || (t.due && !(t.start && t.due < t.start))) return null;
+  const t = parse(task.raw);
+  /* A 📅 only when the line is parked (see isParked). */
+  if (!L.isOpen(t) || t.scheduled || (t.due && !isParked(t, today, nextWeekStart))) return null;
   const base = {
     key: `${task.path}:${task.line}`, source: 'tasks', path: task.path, line: task.line, raw: task.raw,
-    text: t.text, scheduled: '', due: t.due, start: t.start, time: '',
-    deadlineOnly: false, priority: t.priority, tags: t.tags, done: false, date: '', tagged: false,
+    text: nameOf(t.text, t.tags), scheduled: '', due: t.due, start: t.start, time: '',
+    deadlineOnly: false, priority: t.priority, tags: t.tags.slice(), done: false, doneDate: '', date: '', tagged: false,
+    unique: task.unique === true,
   };
   if (t.start) return Object.assign(base, { slot: t.start >= nextWeekStart ? 'nextWeek' : 'later' });
-  const planner = plannerPathOf(settings);
   if (task.path === planner || inFolders(task.path, settings.laterFolders)) return Object.assign(base, { slot: 'later' });
-  /* Parked in Later from a note Later doesn't otherwise read (Q36). */
-  if (L.hasTag(task.raw, settings.laterTag || '#later')) return Object.assign(base, { slot: 'later', tagged: true });
+  /* Parked in Later from a note Later doesn't otherwise read (Q36). The tag
+     test builds a RegExp, so it only runs on a line that could hold the tag. */
+  const tag = settings.laterTag || '#later';
+  const raw = String(task.raw || '');
+  if (raw.toLowerCase().includes(String(tag).toLowerCase()) && L.hasTag(raw, tag)) {
+    return Object.assign(base, { slot: 'later', tagged: true });
+  }
   return null;
 }
 
@@ -117,19 +155,26 @@ function practiceCard(p, date) {
   };
 }
 
-/* Within a day: events first, in Rhythm's own order (time then name, so an
-   all-day event leads); then anything at a set time, earliest first; then
-   by priority, then where the line lives. */
+/* Within a day: events first — all-day ones, then timed ones by the clock,
+   then by name; then anything at a set time, earliest first; then by
+   priority, then where the line lives. A time is compared as written in
+   its note, "9:00" or "09:00" alike: a single-digit hour is padded, so 9:00
+   comes before 10:30 (as text it would come after). */
 const byPlace = (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0) || a.line - b.line;
+
+const clock = t => String(t || '').trim().replace(/^(\d):/, '0$1:');
 
 function byTimeThenPriority(a, b) {
   const ea = a.source === 'event', eb = b.source === 'event';
   if (ea !== eb) return ea ? -1 : 1;
-  if (ea) return (a.time + a.text).localeCompare(b.time + b.text);
-  if (a.time || b.time) {
-    if (!a.time) return 1;
-    if (!b.time) return -1;
-    if (a.time !== b.time) return a.time < b.time ? -1 : 1;
+  const ta = clock(a.time), tb = clock(b.time);
+  /* An all-day event has no time, and '' sorts before every clock time —
+     compared apart from the name, so a letter-named one still leads. */
+  if (ea) return (ta < tb ? -1 : ta > tb ? 1 : 0) || String(a.text).localeCompare(String(b.text));
+  if (ta || tb) {
+    if (!ta) return 1;
+    if (!tb) return -1;
+    if (ta !== tb) return ta < tb ? -1 : 1;
   }
   return (L.PRIORITY_RANK[b.priority] - L.PRIORITY_RANK[a.priority])
     || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
@@ -160,18 +205,32 @@ function planBoard({ today, tasks = [], settings = {}, rhythm = null }) {
   const later = [];
   /* Still open and its day has gone: Slipped, shown at the top of Today so
      it can't be missed. Its old day is kept as `date` for the "from" label;
-     nothing is rolled forward in the note. */
+     nothing is rolled forward in the note. A day that isn't on the calendar
+     (⏳ 2026-09-31) has gone too — it is Slipped, so it can't vanish. */
   const slipped = [];
+  /* Every done card whose ✅ is today, wherever its planned day is. */
+  const doneToday = [];
+  const planner = plannerPathOf(settings);
+  startParseGeneration();
   for (const task of tasks) {
     if (inFolders(task.path, settings.excludeFolders)) continue;
-    const card = cardFor(task, today);
+    const card = cardFor(task, today, nwStart);
     if (!card) {
-      const parked = undatedCard(task, nwStart, settings);
+      const parked = undatedCard(task, today, nwStart, planner, settings);
       if (parked) (parked.slot === 'later' ? later : nextWeek.anyDay).push(parked);
       continue;
     }
-    if (card.done) { const d = byDate.get(card.date); if (d) d.done.push(card); continue; }
-    if (card.date < today) { slipped.push(card); continue; }
+    if (card.done) {
+      if (card.doneDate === today) doneToday.push(card);
+      const d = byDate.get(card.date);
+      if (d) d.done.push(card);
+      else {
+        const n = nwByDate.get(card.date);
+        if (n) n.done.push(Object.assign(card, { slot: 'nextWeek' }));
+      }
+      continue;
+    }
+    if (!D.isDate(card.date) || card.date < today) { slipped.push(card); continue; }
     const d = byDate.get(card.date);
     if (d) { d.cards.push(card); continue; }
     const n = nwByDate.get(card.date);
@@ -179,20 +238,23 @@ function planBoard({ today, tasks = [], settings = {}, rhythm = null }) {
   }
   const tray = rhythm ? placeRhythm(rhythm, days, today, start, byDate, nextWeek.days, nwByDate) : [];
   for (const d of days) { d.cards.sort(byTimeThenPriority); d.done.sort(byTimeThenPriority); }
-  for (const d of nextWeek.days) d.cards.sort(byTimeThenPriority);
+  for (const d of nextWeek.days) { d.cards.sort(byTimeThenPriority); d.done.sort(byTimeThenPriority); }
+  doneToday.sort(byTimeThenPriority);
   nextWeek.anyDay.sort(byPlace);
-  const planner = plannerPathOf(settings);
   later.sort((a, b) => ((b.path === planner) - (a.path === planner)) || byPlace(a, b));
   nextWeek.count = nextWeek.anyDay.length + nextWeek.days.reduce((n, d) => n + d.cards.length, 0);
   slipped.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : byTimeThenPriority(a, b)));
-  return { weekStart: start, today, days, slipped, tray, nextWeek, later };
+  return { weekStart: start, today, days, slipped, tray, nextWeek, later, doneToday };
 }
 
 /* Rhythm on the board, all by Rhythm's own rules: events on their day,
    practices promised to a day on that day, a count of daily practices, and
    the tray — weekly and monthly practices with sessions still to place (its
-   shelf(), as on Rhythm's own Plan board). The tray looks from the first day still ahead to the end of the
-   week showing: on Sunday that is the whole week ahead. */
+   shelf(), as on Rhythm's own Plan board). The tray looks from the first day still ahead to the end of NEXT
+   week, so a practice promised to a day next week (a monthly one, whose period
+   reaches that far) counts as placed; shelf() itself stops at the end of each
+   practice's own period, so a weekly one promised next week still wants a day
+   this week. On Sunday the first day is the week ahead. */
 function placeRhythm(data, days, today, start, byDate, nwDays, nwByDate) {
   const weekStart = data.weekStart == null ? 1 : data.weekStart;
   for (const e of data.events || []) {
@@ -217,7 +279,7 @@ function placeRhythm(data, days, today, start, byDate, nwDays, nwByDate) {
     }
   });
   const from = start > today ? start : today;
-  const left = D.diffDays(from, D.addDays(start, 6)) + 1;
+  const left = D.diffDays(from, D.addDays(start, 13)) + 1;
   return RM.shelf(data, from, left, { weekStart }).map(s => ({
     name: s.p.name, area: s.p.area || '', path: s.p.path, need: s.need, target: s.pr.target,
   }));
@@ -226,20 +288,23 @@ function placeRhythm(data, days, today, start, byDate, nwDays, nwByDate) {
 /* What a card can do — ONE rule, used by the phone sheet and the desktop
    Move menu alike (the store enforces the same limits on writes). */
 function actionsFor(card, board) {
-  const a = { open: true, day: false, nextWeek: false, later: false, done: false, drop: false, dropWhy: '' };
+  const a = { open: true, day: false, nextWeek: false, later: false, laterWhy: '', done: false, drop: false, dropWhy: '' };
   /* Finished, or fixed: nothing to move. */
   if (card.done || card.source === 'event') return a;
   a.day = true;
   a.done = !card.fromTray;
   if (card.source === 'tasks') {
-    const t = L.parseTask(card.raw || '');
+    const t = parse(card.raw || '');
     const due = card.due || (t && t.due) || '';
     const dueSooner = !!due && due >= board.today && due < board.nextWeek.start;
-    a.nextWeek = !dueSooner && !(card.slot === 'nextWeek' && !card.date);
+    /* Already in Next week (a day or "any day"): parking there would only
+       write a 🛫 and nothing would move. */
+    a.nextWeek = !dueSooner && card.slot !== 'nextWeek';
     a.later = !due && card.slot !== 'later';
-    /* Tasks never makes the next occurrence of a cancelled line: dropping a
-       🔁 to-do would end the repeat for good. */
-    if (t && t.recurrence) a.dropWhy = 'repeats';
+    /* A 🔁 to-do needs a date for Tasks to repeat it, and Later has none; and
+       Tasks never makes the next occurrence of a cancelled line, so dropping
+       it would end the repeat for good. */
+    if (t && t.recurrence) { a.later = false; a.laterWhy = 'repeats'; a.dropWhy = 'repeats'; }
     else a.drop = true;
   }
   return a;

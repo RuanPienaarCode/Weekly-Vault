@@ -404,4 +404,325 @@ assert.strictEqual(planBoard({ today: '2026-10-04', tasks: [], settings: {} }).n
   assert.strictEqual(bins.dropWhy, 'repeats');
 }
 
+/* ---- audit 7 Oct 2026, lane B: the board model ---- */
+const D = require('../src/dates');
+
+/* 19. B1/B2: "parked" is exactly what Fortnight's Next week writes — an
+       OVERDUE 📅 plus a 🛫 on a later week's Monday. A deadline still ahead
+       is never hidden behind its 🛫: it sits on its due day. */
+{
+  const ahead = planBoard({ today: WED, settings: {}, tasks: [task('- [ ] Renew disc 📅 2026-10-02 🛫 2026-10-05', 'Cars.md', 2)] });
+  assert.deepStrictEqual(texts(ahead, '2026-10-02'), ['Renew disc']);
+  assert.strictEqual(day(ahead, '2026-10-02').cards[0].deadlineOnly, true);
+  assert.deepStrictEqual(ahead.nextWeek.anyDay, []);
+  assert.deepStrictEqual(ahead.later, []);
+  /* the Tasks-repeat shape: park an overdue 🔁, tick it, and Tasks moves
+     📅 and 🛫 forward together — 📅 25 Oct, 🛫 4 Nov */
+  const rep = [task('- [ ] Water plants 🔁 every week 🛫 2026-11-04 📅 2026-10-25', 'Home.md', 1)];
+  const onDay = planBoard({ today: '2026-10-21', settings: {}, tasks: rep });
+  assert.deepStrictEqual(texts(onDay, '2026-10-25'), ['Water plants']);
+  assert.deepStrictEqual(onDay.nextWeek.anyDay, []);
+  /* 28 Oct: the 25th has passed and the 🛫 is in a later week → parked */
+  const parked = planBoard({ today: '2026-10-28', settings: {}, tasks: rep });
+  assert.deepStrictEqual(parked.nextWeek.anyDay.map(c => c.text), ['Water plants']);
+  assert.deepStrictEqual(parked.slipped, []);
+  /* 3 Nov: its 🛫 week has come → it slips by its overdue 📅, never Later */
+  const back = planBoard({ today: '2026-11-03', settings: {}, tasks: rep });
+  assert.deepStrictEqual(back.slipped.map(c => [c.text, c.date]), [['Water plants', '2026-10-25']]);
+  assert.deepStrictEqual(back.later, []);
+  assert.deepStrictEqual(back.nextWeek.anyDay, []);
+  /* B2: Sunday — the board has jumped to the week ahead, so Monday's 🛫
+     is no longer "a later week": the overdue card is Slipped, not in Later */
+  const sun = planBoard({ today: '2026-10-04', settings: {}, tasks: [task('- [ ] Licence disc 📅 2026-07-31 🛫 2026-10-05', 'Cars.md', 2)] });
+  assert.deepStrictEqual(sun.slipped.map(c => c.text), ['Licence disc']);
+  assert.deepStrictEqual(sun.later, []);
+  assert.deepStrictEqual(sun.nextWeek.anyDay, []);
+}
+
+/* 20. B4: a date that isn't on the calendar can never make a card vanish —
+       it is Slipped (string order would put 31 Sep after today). Impossible
+       days are not rolled to the next month: 29 Feb 2028 is real, 2027 isn't. */
+{
+  assert.strictEqual(D.isDate('2028-02-29'), true);
+  assert.strictEqual(D.isDate('2027-02-29'), false);
+  assert.strictEqual(D.isDate('2026-09-31'), false);
+  assert.strictEqual(D.isDate('2026-13-01'), false);
+  assert.strictEqual(D.isDate('2026-00-10'), false);
+  assert.strictEqual(D.isDate('2026-9-1'), false);
+  assert.strictEqual(D.isDate(''), false);
+  assert.strictEqual(D.isDate(undefined), false);
+  /* shown as written, never "1 undefined" */
+  assert.strictEqual(D.short('2026-10-01'), '1 Oct');
+  assert.strictEqual(D.short('2028-02-29'), '29 Feb');
+  assert.strictEqual(D.short('2026-13-01'), '2026-13-01');
+  assert.strictEqual(D.short('2026-09-31'), '2026-09-31');
+  const b = planBoard({ today: WED, settings: {}, tasks: [
+    task('- [ ] Day thirty-one ⏳ 2026-09-31', 'Notes/Home.md', 1),
+    task('- [ ] Feb thirty 📅 2026-02-30', 'Notes/Home.md', 2),
+    task('- [ ] Month thirteen ⏳ 2026-13-01', 'Notes/Home.md', 3),
+    task('- [ ] Fine one ⏳ 2026-10-01', 'Notes/Home.md', 4),
+    task('- [ ] Leap day, far off ⏳ 2028-02-29', 'Notes/Home.md', 5),
+    task('- [x] Done on a bad day ⏳ 2026-09-31 ✅ 2026-09-30', 'Notes/Home.md', 6),
+    { source: 'nudge', path: 'Reminders.md', line: 1, text: 'Bad nudge', due: '2026-02-30', scheduled: '', time: '', done: false, priority: 'normal', raw: '' },
+  ] });
+  assert.deepStrictEqual(b.slipped.map(c => [c.text, c.date]), [
+    ['Feb thirty', '2026-02-30'], ['Bad nudge', '2026-02-30'], ['Day thirty-one', '2026-09-31'], ['Month thirteen', '2026-13-01'],
+  ]);
+  assert.deepStrictEqual(texts(b, '2026-10-01'), ['Fine one']);
+  /* a done card with an impossible planned day falls back to the day it was done */
+  assert.deepStrictEqual(day(b, WED).done.map(c => c.text), ['Done on a bad day']);
+}
+
+/* 21. B3: all-day events lead (even with a letter-named one), then timed
+       events by the CLOCK — "9:00" is before "10:30", not after — then
+       other timed cards the same way, then untimed by priority */
+{
+  const data = rhythmFixture();
+  data.events = [
+    { name: 'Dentist', date: '2026-10-01', time: '14:00', path: 'e/Dentist.md' },
+    { name: 'Standup', date: '2026-10-01', time: '9:00', path: 'e/Standup.md' },
+    { name: 'Run', date: '2026-10-01', time: '07:30', path: 'e/Run.md' },
+    { name: 'Birthday', date: '2026-10-01', time: '', path: 'e/Birthday.md' },
+    { name: 'Anniversary', date: '2026-10-01', time: '', path: 'e/Anniversary.md' },
+  ];
+  const n = (text, time, line) => ({ source: 'nudge', path: 'Reminders.md', line, text, due: '2026-10-01', scheduled: '', time, done: false, priority: 'normal', raw: '' });
+  const b = planBoard({ today: WED, settings: {}, rhythm: data, tasks: [
+    task('- [ ] Plain ⏳ 2026-10-01', 'A.md', 1),
+    n('Late', '10:30', 2), n('Nine', '9:00', 3), n('Early', '07:45', 4),
+  ] });
+  assert.deepStrictEqual(texts(b, '2026-10-01'), ['Anniversary', 'Birthday', 'Run', 'Standup', 'Dentist', 'Early', 'Nine', 'Late', 'Plain']);
+}
+
+/* 22. B5: the tray looks to the end of NEXT week, so a monthly practice
+       promised to a day next week (same month) is placed. A weekly one
+       promised next week still wants a day THIS week; a monthly one promised
+       into the next month still wants a day this month. */
+{
+  const data = () => {
+    const d = rhythmFixture();
+    d.practices = [
+      { name: 'Range day', area: 'Body', cadence: 'monthly', path: 'p/Range.md' },
+      { name: 'Paint', area: 'Craft', cadence: 'weekly', path: 'p/Paint.md' },
+    ];
+    d.events = [];
+    return d;
+  };
+  const a = data();
+  a.log = new Map([['2026-10-14', E({ plan: ['Range day', 'Paint'] })]]);
+  const b = planBoard({ today: '2026-10-07', settings: {}, rhythm: a, tasks: [] });
+  assert.deepStrictEqual(b.tray.map(t => [t.name, t.need]), [['Paint', 1]]);
+  assert.deepStrictEqual(b.nextWeek.days[2].cards.map(c => c.text), ['Paint', 'Range day']);
+  const z = data();
+  z.log = new Map([['2026-11-03', E({ plan: ['Range day'] })]]);
+  assert.deepStrictEqual(planBoard({ today: '2026-10-28', settings: {}, rhythm: z, tasks: [] }).tray.map(t => [t.name, t.need]), [['Range day', 1], ['Paint', 1]]);
+}
+
+/* 23. B6/F2: doneToday is every done card whose ✅ is today — wherever its
+       planned day is (this week, next week, past, beyond the board) — and
+       every card carries its doneDate. A done card on a next-week day sits in
+       THAT day's done list. Excluded folders stay out; a done line with no ✅
+       and a past day keeps vanishing (nothing says when it happened). */
+{
+  const nudge = (text, line, due, extra = {}) => Object.assign(
+    { source: 'nudge', path: 'Reminders.md', line, text, due, scheduled: '', time: '', done: true, doneDate: WED, priority: 'normal', raw: `- [x] ${text}` }, extra);
+  const b = planBoard({ today: WED, settings: { excludeFolders: ['Archive'] }, tasks: [
+    task('- [x] Done early ⏳ 2026-10-02 ✅ 2026-09-30', 'A.md', 1),
+    task('- [x] Done in the past ⏳ 2026-09-28 ✅ 2026-09-28', 'A.md', 2),
+    task('- [x] Slipped ticked ⏳ 2026-09-21 ✅ 2026-09-30', 'A.md', 3),
+    task('- [x] Next week ticked ⏳ 2026-10-06 ✅ 2026-09-30', 'A.md', 4),
+    task('- [x] Far ticked ⏳ 2026-12-01 ✅ 2026-09-30', 'A.md', 5),
+    task('- [x] Ticked as due 📅 2026-09-30 ✅ 2026-09-30', 'A.md', 6),
+    task('- [x] No tick date ⏳ 2026-09-21', 'A.md', 7),
+    task('- [x] Excluded ⏳ 2026-10-01 ✅ 2026-09-30', 'Archive/X.md', 1),
+    task('- [ ] Still open ⏳ 2026-10-01', 'A.md', 8),
+    nudge('Paid rates', 2, '2026-10-01'),
+    nudge('Late rates', 3, '2026-09-20'),
+    nudge('Paid last week', 4, '2026-09-22', { doneDate: '2026-09-22' }),
+  ] });
+  assert.deepStrictEqual(b.doneToday.map(c => c.text), [
+    'Done early', 'Slipped ticked', 'Next week ticked', 'Far ticked', 'Ticked as due', 'Paid rates', 'Late rates',
+  ]);
+  assert.deepStrictEqual(b.doneToday.map(c => c.doneDate), Array(7).fill(WED));
+  assert.deepStrictEqual(day(b, '2026-10-02').done.map(c => c.text), ['Done early']);
+  assert.deepStrictEqual(day(b, '2026-10-01').done.map(c => c.text), ['Paid rates']);
+  assert.deepStrictEqual(day(b, WED).done.map(c => c.text), ['Slipped ticked', 'Ticked as due', 'Late rates']);
+  assert.deepStrictEqual(day(b, '2026-09-28').done.map(c => c.text), ['Done in the past']);
+  assert.deepStrictEqual(b.nextWeek.days[1].done.map(c => [c.text, c.slot]), [['Next week ticked', 'nextWeek']]);
+  assert.deepStrictEqual(b.slipped, []);
+  /* nothing done today: an empty list, not missing; open cards carry no doneDate */
+  const none = planBoard({ today: WED, settings: {}, tasks: [task('- [ ] Open ⏳ 2026-10-01')] });
+  assert.deepStrictEqual(none.doneToday, []);
+  assert.strictEqual(day(none, '2026-10-01').cards[0].doneDate, '');
+}
+
+/* 24. B9/F1/contract 3: what a card can do — Next week is off for a card
+       already in Next week (a day or "any day": the park would only write
+       a 🛫 and nothing would move); Later is off for a 🔁 to-do, with the
+       reason; the due-sooner line is "today up to, not including, next Monday" */
+{
+  const b = planBoard({ today: WED, tasks: [], settings: {} });
+  const only = a => Object.keys(a).filter(k => a[k]).sort();
+  const t = (raw, extra = {}) => Object.assign({ source: 'tasks', raw, date: '2026-10-01', due: '', done: false }, extra);
+  assert.deepStrictEqual(only(actionsFor(t('- [ ] Tax 📅 2026-10-09', { due: '2026-10-09', date: '2026-10-09', slot: 'nextWeek' }), b)), ['day', 'done', 'drop', 'open']);
+  assert.deepStrictEqual(only(actionsFor(t('- [ ] Call ⏳ 2026-10-07', { date: '2026-10-07', slot: 'nextWeek' }), b)), ['day', 'done', 'drop', 'later', 'open']);
+  assert.deepStrictEqual(only(actionsFor(t('- [ ] Some day', { date: '', slot: 'nextWeek' }), b)), ['day', 'done', 'drop', 'later', 'open']);
+  /* a to-do in Later can't go to Later again; the rest is open */
+  assert.deepStrictEqual(only(actionsFor(t('- [ ] Idea', { date: '', slot: 'later' }), b)), ['day', 'done', 'drop', 'nextWeek', 'open']);
+  /* 🔁: no Later (Tasks needs a date on a repeat), and it says why */
+  const bins = actionsFor(t('- [ ] Bins out 🔁 every week ⏳ 2026-10-01'), b);
+  assert.strictEqual(bins.later, false);
+  assert.strictEqual(bins.laterWhy, 'repeats');
+  assert.deepStrictEqual(only(bins), ['day', 'done', 'laterWhy', 'nextWeek', 'open', 'dropWhy'].sort());
+  assert.strictEqual(actionsFor(t('- [ ] Bins out 🔁 every week', { date: '' }), b).later, false);
+  assert.strictEqual(actionsFor(t('- [ ] Bins out 🔁 every week', { date: '' }), b).laterWhy, 'repeats');
+  assert.strictEqual(actionsFor(t('- [ ] Paint'), b).laterWhy, '');
+  /* due-sooner read from the line when the card has no due: Wed 30 Sep,
+     next Monday 5 Oct */
+  const nw = raw => actionsFor({ source: 'tasks', raw, date: '', done: false }, b).nextWeek;
+  assert.strictEqual(nw('- [ ] X 📅 2026-09-29'), true);
+  assert.strictEqual(nw('- [ ] X 📅 2026-09-30'), false);
+  assert.strictEqual(nw('- [ ] X 📅 2026-10-04'), false);
+  assert.strictEqual(nw('- [ ] X 📅 2026-10-05'), true);
+  /* on the jump day (Sunday 4 Oct) the board shows the week ahead and next
+     week is the one after it: a deadline on Friday 9th is "sooner" */
+  const sun = planBoard({ today: '2026-10-04', tasks: [], settings: {} });
+  const nwSun = raw => actionsFor({ source: 'tasks', raw, date: '', done: false }, sun).nextWeek;
+  assert.strictEqual(nwSun('- [ ] X 📅 2026-10-03'), true);
+  assert.strictEqual(nwSun('- [ ] X 📅 2026-10-04'), false);
+  assert.strictEqual(nwSun('- [ ] X 📅 2026-10-09'), false);
+  assert.strictEqual(nwSun('- [ ] X 📅 2026-10-12'), true);
+  assert.strictEqual(sun.nextWeek.start, '2026-10-12');
+}
+
+/* 25. contract 1 — card.unique: the store's "this exact line occurs once in
+       its note" flag crosses to the card as a strict boolean, on dated and
+       undated (Later / Next week) cards alike */
+{
+  const u = (raw, path, line, unique) => Object.assign(task(raw, path, line), unique === undefined ? {} : { unique });
+  const b = planBoard({ today: WED, settings: { plannerNote: 'Planning/Fortnight.md' }, tasks: [
+    u('- [ ] Once ⏳ 2026-10-01', 'A.md', 1, true),
+    u('- [ ] Twin ⏳ 2026-10-01', 'A.md', 2, false),
+    u('- [ ] Unknown ⏳ 2026-10-01', 'A.md', 3),
+    u('- [ ] Truthy ⏳ 2026-10-01', 'A.md', 4, 'yes'),
+    u('- [ ] Later once', 'Planning/Fortnight.md', 5, true),
+    u('- [ ] Later twin', 'Planning/Fortnight.md', 6, false),
+    u('- [ ] Later truthy', 'Planning/Fortnight.md', 8, 'yes'),
+    u('- [ ] Parked 🛫 2026-10-05', 'A.md', 7, true),
+  ] });
+  assert.deepStrictEqual(day(b, '2026-10-01').cards.map(c => [c.text, c.unique]), [['Once', true], ['Twin', false], ['Unknown', false], ['Truthy', false]]);
+  assert.deepStrictEqual(b.later.map(c => [c.text, c.unique]), [['Later once', true], ['Later twin', false], ['Later truthy', false]]);
+  assert.deepStrictEqual(b.nextWeek.anyDay.map(c => [c.text, c.unique]), [['Parked', true]]);
+}
+
+/* 26. B7 (model side) + G4: a line that is only tags still has a name on
+       the card; parsing is cached by raw across boards but a board never
+       shares state with the last one; the tag test is case-blind and whole-
+       tag; plannerPathOf reads each setting afresh */
+{
+  const b = planBoard({ today: WED, settings: {}, tasks: [task('- [ ] #errand #home ⏳ 2026-10-01', 'A.md', 1)] });
+  assert.deepStrictEqual(texts(b, '2026-10-01'), ['#errand #home']);
+  assert.deepStrictEqual(day(b, '2026-10-01').cards[0].tags, ['#errand', '#home']);
+  /* the same raw on a second board: fresh card, and scribbling on the first
+     board's tags can't reach the next */
+  const raw = '- [ ] Write ⏳ 2026-10-01 #work';
+  const one = planBoard({ today: WED, settings: {}, tasks: [task(raw, 'A.md', 1)] });
+  one.days[3].cards[0].tags.push('#poison');
+  one.days[3].cards[0].text = 'changed';
+  const two = planBoard({ today: WED, settings: {}, tasks: [task(raw, 'A.md', 1), task(raw, 'B.md', 2)] });
+  assert.deepStrictEqual(two.days[3].cards.map(c => [c.text, c.tags.join(' ')]), [['Write', '#work'], ['Write', '#work']]);
+  /* a different line at the same place is read afresh */
+  const three = planBoard({ today: WED, settings: {}, tasks: [task('- [ ] Rewrite ⏳ 2026-10-02', 'A.md', 1)] });
+  assert.deepStrictEqual(texts(three, '2026-10-02'), ['Rewrite']);
+  assert.deepStrictEqual(texts(three, '2026-10-01'), []);
+  /* the later tag: case-blind, whole tag only, any configured tag */
+  const tagged = planBoard({ today: WED, settings: { laterTag: '#Someday' }, tasks: [
+    task('- [ ] Mixed case #SOMEDAY', 'A.md', 1),
+    task('- [ ] Longer tag #somedayish', 'A.md', 2),
+    task('- [ ] Default tag #later', 'A.md', 3),
+    task('- [ ] No tag at all', 'A.md', 4),
+  ] });
+  assert.deepStrictEqual(tagged.later.map(c => c.text), ['Mixed case']);
+  /* the planner path memo follows the setting, never sticks */
+  const { plannerPathOf } = require('../src/plan');
+  assert.strictEqual(plannerPathOf({ plannerNote: 'Plans/Mine' }), 'Plans/Mine.md');
+  assert.strictEqual(plannerPathOf({}), 'Planning/Fortnight.md');
+  assert.strictEqual(plannerPathOf({ plannerNote: './Other.md' }), 'Other.md');
+  assert.strictEqual(plannerPathOf({ plannerNote: 'Plans/Mine' }), 'Plans/Mine.md');
+  assert.strictEqual(plannerPathOf(undefined), 'Planning/Fortnight.md');
+}
+
+/* 27. calendar boundaries and the weekStart-0 jump, with no Rhythm to
+       override the setting */
+{
+  /* Saturday jumps to a Sunday-start week: today stays in front */
+  const sat = planBoard({ today: '2026-10-03', tasks: [], settings: { weekStart: 0 } });
+  assert.strictEqual(sat.weekStart, '2026-10-04');
+  assert.deepStrictEqual(dates(sat), ['2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10']);
+  assert.deepStrictEqual(sat.days.map(d => d.isToday), [true, false, false, false, false, false, false, false]);
+  assert.strictEqual(sat.nextWeek.start, '2026-10-11');
+  const fri = planBoard({ today: '2026-10-02', tasks: [], settings: { weekStart: 0 } });
+  assert.strictEqual(fri.weekStart, '2026-09-27');
+  assert.strictEqual(fri.days.length, 7);
+  assert.strictEqual(fri.nextWeek.start, '2026-10-04');
+  const sun = planBoard({ today: '2026-10-04', tasks: [], settings: { weekStart: 0 } });
+  assert.strictEqual(sun.weekStart, '2026-10-04');
+  assert.strictEqual(sun.days.length, 7);
+  /* year end: Thu 31 Dec 2026 shows Mon 28 Dec – Sun 3 Jan */
+  const ye = planBoard({ today: '2026-12-31', settings: {}, tasks: [task('- [ ] New year ⏳ 2027-01-01', 'A.md', 1), task('- [ ] Back in 2027 ⏳ 2027-01-05', 'A.md', 2)] });
+  assert.deepStrictEqual(dates(ye), ['2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02', '2027-01-03']);
+  assert.strictEqual(ye.nextWeek.start, '2027-01-04');
+  assert.deepStrictEqual(texts(ye, '2027-01-01'), ['New year']);
+  assert.deepStrictEqual(ye.nextWeek.days[1].cards.map(c => c.text), ['Back in 2027']);
+  /* leap year: Sunday 27 Feb 2028 jumps to the week with a 29 Feb in it */
+  const leap = planBoard({ today: '2028-02-27', settings: {}, tasks: [task('- [ ] Leap day ⏳ 2028-02-29', 'A.md', 1)] });
+  assert.deepStrictEqual(dates(leap), ['2028-02-27', '2028-02-28', '2028-02-29', '2028-03-01', '2028-03-02', '2028-03-03', '2028-03-04', '2028-03-05']);
+  assert.strictEqual(leap.nextWeek.start, '2028-03-06');
+  assert.deepStrictEqual(texts(leap, '2028-02-29'), ['Leap day']);
+  /* a common year has no 29th: Sunday 28 Feb 2027 goes straight to 1 Mar */
+  const common = planBoard({ today: '2027-02-28', settings: {}, tasks: [] });
+  assert.deepStrictEqual(dates(common), ['2027-02-28', '2027-03-01', '2027-03-02', '2027-03-03', '2027-03-04', '2027-03-05', '2027-03-06', '2027-03-07']);
+  assert.strictEqual(common.nextWeek.start, '2027-03-08');
+}
+
+/* 28. a reminder that slipped and was ticked today is done, not slipped:
+       it sits in today's Done */
+{
+  const b = planBoard({ today: WED, settings: {}, tasks: [
+    { source: 'nudge', path: 'Reminders.md', line: 1, text: 'Late call', due: '2026-09-20', scheduled: '', time: '', done: true, doneDate: WED, priority: 'normal', raw: '- [x] Late call' },
+  ] });
+  assert.deepStrictEqual(b.slipped, []);
+  assert.deepStrictEqual(day(b, WED).done.map(c => [c.source, c.text, c.date]), [['nudge', 'Late call', WED]]);
+}
+
+/* 29. G4: a line is parsed once however many boards show it (and once per
+       board, though an undated line is looked at twice), and the tag
+       RegExp is only built for a line that could hold the tag */
+{
+  const L = require('../src/tasks-line');
+  const realParse = L.parseTask, realHas = L.hasTag;
+  let parses = 0, tagTests = 0;
+  L.parseTask = raw => { parses++; return realParse(raw); };
+  L.hasTag = (raw, tag) => { tagTests++; return realHas(raw, tag); };
+  try {
+    const tasks = [
+      task('- [ ] Cache dated ⏳ 2026-10-01', 'Cache.md', 1),
+      task('- [ ] Cache undated plain', 'Cache.md', 2),
+      task('- [ ] Cache undated tagged #later', 'Cache.md', 3),
+    ];
+    const first = planBoard({ today: WED, settings: {}, tasks });
+    assert.strictEqual(parses, 3);
+    assert.strictEqual(tagTests, 1);
+    assert.deepStrictEqual(first.later.map(c => c.text), ['Cache undated tagged']);
+    const again = planBoard({ today: WED, settings: {}, tasks });
+    assert.strictEqual(parses, 3);
+    assert.deepStrictEqual(again.later.map(c => c.text), ['Cache undated tagged']);
+    const more = planBoard({ today: WED, settings: {}, tasks: tasks.concat(task('- [ ] Cache new ⏳ 2026-10-02', 'Cache.md', 4)) });
+    assert.strictEqual(parses, 4);
+    assert.deepStrictEqual(texts(more, '2026-10-02'), ['Cache new']);
+  } finally {
+    L.parseTask = realParse;
+    L.hasTag = realHas;
+  }
+}
+
 console.log('plan-board OK');

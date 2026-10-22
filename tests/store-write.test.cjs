@@ -32,7 +32,8 @@ const rhythm = { rhythm: { settings: {} } };
   /* 11c. a Nudge reminder moves through Nudge; Fortnight writes nothing */
   {
     const calls = [];
-    const nudge = { isOurs: p => p === 'Reminders.md', path: () => 'Reminders.md', load: async () => ({ items: [] }),
+    const nudge = { isOurs: p => p === 'Reminders.md', path: () => 'Reminders.md',
+      load: async () => ({ items: [{ raw: '- [ ] Phone the dentist 📅 2026-10-01 ⏰ 09:30', line: 0, group: '', due: '2026-10-01', title: 'Phone the dentist' }] }),
       setDue: async (item, due) => { calls.push([item.raw, item.line, due]); return { ok: true }; } };
     const app = makeApp({ 'Reminders.md': '- [ ] Phone the dentist 📅 2026-10-01 ⏰ 09:30' }, { 'nudge-reminders': { store: nudge } });
     const r = await makeStore({ app, settings: {} }).move({ source: 'nudge', path: 'Reminders.md', line: 0, raw: '- [ ] Phone the dentist 📅 2026-10-01 ⏰ 09:30' }, '2026-10-03');
@@ -96,7 +97,8 @@ const rhythm = { rhythm: { settings: {} } };
           same text in different lists can't be mixed up */
   {
     const calls = [];
-    const nudge = { isOurs: () => true, path: () => 'Reminders.md', load: async () => ({ items: [] }),
+    const nudge = { isOurs: () => true, path: () => 'Reminders.md',
+      load: async () => ({ items: [{ raw: '- [ ] Phone mum 📅 2026-10-01', line: 7, group: 'Work', due: '2026-10-01', title: 'Phone mum' }] }),
       setDue: async (item, due) => { calls.push(Object.assign({ due }, item)); return { ok: true }; } };
     const app = makeApp({}, { 'nudge-reminders': { store: nudge } });
     await makeStore({ app, settings: {} }).move({ source: 'nudge', path: 'Reminders.md', line: 7, raw: '- [ ] Phone mum 📅 2026-10-01', group: 'Work' }, '2026-10-09');
@@ -105,7 +107,8 @@ const rhythm = { rhythm: { settings: {} } };
 
   /* 11i. Nudge says it couldn't find the reminder: reported, not hidden */
   {
-    const nudge = { isOurs: () => true, path: () => 'Reminders.md', load: async () => ({ items: [] }), setDue: async () => ({ ok: false }) };
+    const nudge = { isOurs: () => true, path: () => 'Reminders.md', setDue: async () => ({ ok: false }),
+      load: async () => ({ items: [{ raw: '- [ ] Gone', line: 0, group: '', due: '2026-10-01', title: 'Gone' }] }) };
     const r = await makeStore({ app: makeApp({}, { 'nudge-reminders': { store: nudge } }), settings: {} })
       .move({ source: 'nudge', path: 'Reminders.md', line: 0, raw: '- [ ] Gone', group: '' }, '2026-10-09');
     assert.deepStrictEqual(r, { ok: false, reason: 'changed' });
@@ -126,11 +129,15 @@ const rhythm = { rhythm: { settings: {} } };
     assert.strictEqual(app.files.get('Home.md'), '# Home\n- [ ] Water plants 🔁 every week ⏳ 2026-10-08\n- [x] Water plants 🔁 every week ⏳ 2026-10-01 ✅ 2026-09-30\nafter');
   }
 
-  /* 12b. without Tasks: a plain tick, nothing else */
+  /* 12b. without Tasks: a plain tick — [x] and the ✅ date (B8: without it a
+          slipped card ticked today had no day to sit on and left the board),
+          nothing else; a CRLF note keeps its \r */
   {
-    const app = makeApp({ 'Home.md': '- [ ] Call plumber ⏳ 2026-10-01' });
-    await makeStore({ app, settings: {} }).tick({ source: 'tasks', path: 'Home.md', line: 0, raw: '- [ ] Call plumber ⏳ 2026-10-01' }, '2026-09-30');
-    assert.strictEqual(app.files.get('Home.md'), '- [x] Call plumber ⏳ 2026-10-01');
+    const app = makeApp({ 'Home.md': '- [ ] Call plumber ⏳ 2026-10-01\n- [ ] Pay rates 📅 2026-10-02 ^abc\r\n' });
+    const store = makeStore({ app, settings: {} });
+    await store.tick({ source: 'tasks', path: 'Home.md', line: 0, raw: '- [ ] Call plumber ⏳ 2026-10-01' }, '2026-09-30');
+    await store.tick({ source: 'tasks', path: 'Home.md', line: 1, raw: '- [ ] Pay rates 📅 2026-10-02 ^abc\r' }, '2026-09-30');
+    assert.strictEqual(app.files.get('Home.md'), '- [x] Call plumber ⏳ 2026-10-01 ✅ 2026-09-30\n- [x] Pay rates 📅 2026-10-02 ✅ 2026-09-30 ^abc\r\n');
   }
 
   /* 12c. a changed line is refused, as for moves */
@@ -144,7 +151,8 @@ const rhythm = { rhythm: { settings: {} } };
   /* 12d. a reminder ticks through Nudge's toggle, naming its list */
   {
     const calls = [];
-    const nudge = { isOurs: () => true, path: () => 'Reminders.md', load: async () => ({ items: [] }),
+    const nudge = { isOurs: () => true, path: () => 'Reminders.md',
+      load: async () => ({ items: [{ raw: '- [ ] Pay rates 📅 2026-10-01', line: 3, group: 'Home', due: '2026-10-01', title: 'Pay rates' }] }),
       toggle: async (item, today) => { calls.push([item.raw, item.line, item.group, today]); return { ok: true }; } };
     const r = await makeStore({ app: makeApp({}, { 'nudge-reminders': { store: nudge } }), settings: {} })
       .tick({ source: 'nudge', path: 'Reminders.md', line: 3, raw: '- [ ] Pay rates 📅 2026-10-01', group: 'Home' }, '2026-09-30');
@@ -202,7 +210,8 @@ const rhythm = { rhythm: { settings: {} } };
 
   /* 12j. Nudge's own reason for a refusal comes through */
   {
-    const nudge = { isOurs: () => true, path: () => 'Reminders.md', load: async () => ({ items: [] }), toggle: async () => ({ ok: false, reason: 'repeat' }) };
+    const nudge = { isOurs: () => true, path: () => 'Reminders.md', toggle: async () => ({ ok: false, reason: 'repeat' }),
+      load: async () => ({ items: [{ raw: '- [ ] Pills 🔁 every day', line: 0, group: '', due: '2026-10-01', title: 'Pills' }] }) };
     const r = await makeStore({ app: makeApp({}, { 'nudge-reminders': { store: nudge } }), settings: {} })
       .tick({ source: 'nudge', path: 'Reminders.md', line: 0, raw: '- [ ] Pills 🔁 every day', group: '' }, '2026-09-30');
     assert.deepStrictEqual(r, { ok: false, reason: 'repeat' });
@@ -226,7 +235,7 @@ const rhythm = { rhythm: { settings: {} } };
     const app = makeApp({ 'Planning/Fortnight.md': '# Fortnight\n\n## Inbox\n- [ ] Earlier thing ⏳ 2026-09-29\n\n## Someday\n- [ ] Learn to sail\n' });
     const store = makeStore({ app, settings: { plannerNote: 'Planning/Fortnight.md' } });
     const r = await store.add({ text: '  Call   the plumber ', date: '2026-10-01' });
-    assert.deepStrictEqual(r, { ok: true });
+    assert.deepStrictEqual(r, { ok: true, raw: '- [ ] Call the plumber ⏳ 2026-10-01' });
     assert.strictEqual(app.files.get('Planning/Fortnight.md'), '# Fortnight\n\n## Inbox\n- [ ] Earlier thing ⏳ 2026-09-29\n- [ ] Call the plumber ⏳ 2026-10-01\n\n## Someday\n- [ ] Learn to sail\n');
   }
 
@@ -304,7 +313,7 @@ const rhythm = { rhythm: { settings: {} } };
     const create = app.vault.create;
     app.vault.create = async p => { await create(p, '# Theirs\n'); throw new Error('File already exists.'); };
     const r = await makeStore({ app, settings: {} }).add({ text: 'Mine', date: '2026-10-01' });
-    assert.deepStrictEqual(r, { ok: true });
+    assert.deepStrictEqual(r, { ok: true, raw: '- [ ] Mine ⏳ 2026-10-01' });
     assert.strictEqual(app.files.get('Planning/Fortnight.md'), '# Theirs\n\n## Inbox\n- [ ] Mine ⏳ 2026-10-01\n');
   }
 
@@ -492,15 +501,270 @@ const rhythm = { rhythm: { settings: {} } };
   }
 
   /* 19. a line that only SHIFTED (a 🔁 tick inserted its next occurrence
-         above it, or a sync added a line) is still found — when it is the
-         one identical line in the note; two identical lines stay refused */
+         above it, or a sync added a line) is still found — when the card was
+         the one identical line in its note at load (`unique`) and is still the
+         one identical line now; two identical lines stay refused */
   {
     const app = makeApp({ 'H.md': '- [ ] New occurrence\n- [ ] A 🔁 every day\n- [ ] B ⏳ 2026-09-30' });
     const store = makeStore({ app, settings: {} });
-    assert.deepStrictEqual(await store.move({ source: 'tasks', path: 'H.md', line: 1, raw: '- [ ] B ⏳ 2026-09-30' }, '2026-10-01'), { ok: true });
+    assert.deepStrictEqual(await store.move({ source: 'tasks', path: 'H.md', line: 1, raw: '- [ ] B ⏳ 2026-09-30', unique: true }, '2026-10-01'), { ok: true });
     assert.strictEqual(app.files.get('H.md'), '- [ ] New occurrence\n- [ ] A 🔁 every day\n- [ ] B ⏳ 2026-10-01');
     const dup = makeApp({ 'D.md': '- [ ] same\nx\n- [ ] same' });
-    assert.deepStrictEqual(await makeStore({ app: dup, settings: {} }).move({ source: 'tasks', path: 'D.md', line: 1, raw: '- [ ] same' }, '2026-10-01'), { ok: false, reason: 'changed' });
+    assert.deepStrictEqual(await makeStore({ app: dup, settings: {} }).move({ source: 'tasks', path: 'D.md', line: 1, raw: '- [ ] same', unique: true }, '2026-10-01'), { ok: false, reason: 'changed' });
+    assert.strictEqual(dup.files.get('D.md'), '- [ ] same\nx\n- [ ] same');
+  }
+
+  /* 19b. A1: a card that was NOT unique at load is never relocated. Trips.md
+          has the same to-do under Cape Town and under Durban; the Cape Town
+          one is ticked elsewhere, so its line is gone — moving its card must
+          not edit the Durban twin that happens to be the only one left. */
+  {
+    const app = makeApp({ 'Trips.md': '# Cape Town\n- [ ] Book hotel\n# Durban\n- [ ] Book hotel\n' });
+    const store = makeStore({ app, settings: {} });
+    const cards = (await store.load()).filter(t => t.source === 'tasks');
+    assert.deepStrictEqual(cards.map(c => [c.line, c.unique]), [[1, false], [3, false]]);
+    const capeTown = cards[0];
+    app.files.set('Trips.md', '# Cape Town\n- [x] Book hotel ✅ 2026-10-06\n# Durban\n- [ ] Book hotel\n');
+    assert.deepStrictEqual(await store.move(capeTown, '2026-10-09'), { ok: false, reason: 'changed' });
+    assert.deepStrictEqual(await store.tick(capeTown, '2026-10-07'), { ok: false, reason: 'changed' });
+    assert.deepStrictEqual(await store.drop(capeTown, '2026-10-07'), { ok: false, reason: 'changed' });
+    assert.strictEqual(app.files.get('Trips.md'), '# Cape Town\n- [x] Book hotel ✅ 2026-10-06\n# Durban\n- [ ] Book hotel\n');
+  }
+
+  /* 19c. a card from load() that was unique follows its line when a line is
+          inserted above it, and Undo follows it too */
+  {
+    const app = makeApp({ 'W.md': '- [ ] Slides ⏳ 2026-10-02\n- [ ] Other\n' });
+    const store = makeStore({ app, settings: {} });
+    const card = (await store.load()).find(t => t.line === 0);
+    assert.strictEqual(card.unique, true);
+    app.files.set('W.md', '- [ ] Inserted above\n- [ ] Slides ⏳ 2026-10-02\n- [ ] Other\n');
+    const r = await store.drop(card, '2026-10-07');
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(app.files.get('W.md'), '- [ ] Inserted above\n- [-] Slides ⏳ 2026-10-02 ❌ 2026-10-07\n- [ ] Other\n');
+    app.files.set('W.md', '- [ ] Another above\n- [ ] Inserted above\n- [-] Slides ⏳ 2026-10-02 ❌ 2026-10-07\n- [ ] Other\n');
+    assert.deepStrictEqual(await store.revert(card, r.after, r.before), { ok: true });
+    assert.strictEqual(app.files.get('W.md'), '- [ ] Another above\n- [ ] Inserted above\n- [ ] Slides ⏳ 2026-10-02\n- [ ] Other\n');
+  }
+
+  /* ---- audit 7 Oct 2026, lane S ---- */
+
+  /* 20. A2: a Nudge card is only written through if Nudge still holds that
+         exact line in that list. Nudge finds a reminder again by its TITLE
+         when its line is gone, so a stale tick of a 🔁 reminder (ticked on
+         the phone since) would complete the NEXT occurrence. Refused before
+         Nudge is asked to write anything. */
+  {
+    const calls = [];
+    let items = [{ raw: '- [ ] Pills 🔁 every day 📅 2026-10-09 ⏰ 08:00', line: 4, group: 'Home', due: '2026-10-09', title: 'Pills' }];
+    const nudge = { isOurs: () => true, path: () => 'Reminders.md', load: async () => ({ items }),
+      toggle: async item => { calls.push(['toggle', item.raw]); return { ok: true }; },
+      setDue: async (item, due) => { calls.push(['setDue', item.raw, due]); return { ok: true }; } };
+    const store = makeStore({ app: makeApp({}, { 'nudge-reminders': { store: nudge } }), settings: {} });
+    /* last night's card: Nudge has since rolled the series on to the 9th */
+    const stale = { source: 'nudge', path: 'Reminders.md', line: 4, raw: '- [ ] Pills 🔁 every day 📅 2026-10-08 ⏰ 08:00', group: 'Home' };
+    assert.deepStrictEqual(await store.tick(stale, '2026-10-08'), { ok: false, reason: 'changed' });
+    assert.deepStrictEqual(await store.move(stale, '2026-10-10'), { ok: false, reason: 'changed' });
+    assert.deepStrictEqual(calls, []);
+    /* the current card goes through */
+    const fresh = Object.assign({}, stale, { raw: items[0].raw });
+    assert.deepStrictEqual(await store.tick(fresh, '2026-10-09'), { ok: true });
+    assert.deepStrictEqual(await store.move(fresh, '2026-10-10'), { ok: true });
+    assert.deepStrictEqual(calls, [['toggle', items[0].raw], ['setDue', items[0].raw, '2026-10-10']]);
+    /* the same line in another list is not this reminder */
+    calls.length = 0;
+    assert.deepStrictEqual(await store.tick(Object.assign({}, fresh, { group: 'Work' }), '2026-10-09'), { ok: false, reason: 'changed' });
+    /* a line that only moved (one match) is fine… */
+    assert.deepStrictEqual(await store.tick(Object.assign({}, fresh, { line: 1 }), '2026-10-09'), { ok: true });
+    /* …but two identical reminders in a list: only a card whose line still matches is certain */
+    items = [Object.assign({}, items[0], { line: 2 }), Object.assign({}, items[0], { line: 5 })];
+    assert.deepStrictEqual(await store.tick(Object.assign({}, fresh, { line: 5 }), '2026-10-09'), { ok: true });
+    assert.deepStrictEqual(await store.tick(Object.assign({}, fresh, { line: 3 }), '2026-10-09'), { ok: false, reason: 'changed' });
+    assert.deepStrictEqual(calls, [['toggle', items[0].raw], ['toggle', items[0].raw]]);
+    /* a Nudge that cannot be read: nothing is written */
+    nudge.load = async () => { throw new Error('boom'); };
+    assert.deepStrictEqual(await store.tick(fresh, '2026-10-09'), { ok: false, reason: 'changed' });
+    assert.strictEqual(calls.length, 2);
+  }
+
+  /* 20b. A5: Nudge can only set 📅, so a reminder with no 📅 (only ⏳) isn't
+          moved — setDue would give it a deadline nobody set while the ⏳
+          stayed on the old day. It can still be ticked. */
+  {
+    const calls = [];
+    const nudge = { isOurs: () => true, path: () => 'Reminders.md',
+      load: async () => ({ items: [{ raw: '- [ ] Plan trip ⏳ 2026-10-08', line: 0, group: '', due: '', scheduled: '2026-10-08', title: 'Plan trip' }] }),
+      setDue: async () => { calls.push('setDue'); return { ok: true }; }, toggle: async () => { calls.push('toggle'); return { ok: true }; } };
+    const store = makeStore({ app: makeApp({}, { 'nudge-reminders': { store: nudge } }), settings: {} });
+    const card = { source: 'nudge', path: 'Reminders.md', line: 0, raw: '- [ ] Plan trip ⏳ 2026-10-08', group: '' };
+    assert.deepStrictEqual(await store.move(card, '2026-10-09'), { ok: false, reason: 'nudge-no-due' });
+    assert.deepStrictEqual(await store.tick(card, '2026-10-08'), { ok: true });
+    assert.deepStrictEqual(calls, ['toggle']);
+  }
+
+  /* 21. A3: Tasks' answer is checked before it is written. Its toggle falls
+         back to a crude replace for a line it can't read as a task (a global
+         filter, a tab), which can leave the box open or dirty — a result with
+         no done line in it is refused ('not-done') and nothing is written. */
+  {
+    const run = async (out, text, raw = '- [ ] Send invoice ⏳ 2026-10-07') => {
+      const app = makeApp({ 'Work.md': text }, { 'obsidian-tasks-plugin': { apiV1: { executeToggleTaskDoneCommand: () => out } } });
+      const r = await makeStore({ app, settings: {} }).tick({ source: 'tasks', path: 'Work.md', line: 0, raw }, '2026-10-07');
+      return [r, app.files.get('Work.md')];
+    }
+    const text = '- [ ] Send invoice ⏳ 2026-10-07\n- [ ] Next';
+    assert.deepStrictEqual(await run('- [ ]\t[ ] Send invoice ⏳ 2026-10-07', text), [{ ok: false, reason: 'not-done' }, text]);
+    assert.deepStrictEqual(await run('- [/] Send invoice ⏳ 2026-10-07', text), [{ ok: false, reason: 'not-done' }, text]);
+    assert.deepStrictEqual(await run('- [-] Send invoice ⏳ 2026-10-07', text), [{ ok: false, reason: 'not-done' }, text]);
+    assert.deepStrictEqual(await run(undefined, text), [{ ok: false, reason: 'not-done' }, text]);
+    assert.deepStrictEqual(await run('Send invoice', text), [{ ok: false, reason: 'not-done' }, text]);
+    /* a done line anywhere in the answer (a 🔁's next occurrence comes first) is fine */
+    assert.deepStrictEqual(await run('- [ ] Send invoice ⏳ 2026-10-14\n- [x] Send invoice ⏳ 2026-10-07 ✅ 2026-10-07', text),
+      [{ ok: true }, '- [ ] Send invoice ⏳ 2026-10-14\n- [x] Send invoice ⏳ 2026-10-07 ✅ 2026-10-07\n- [ ] Next']);
+  }
+
+  /* 21b. A6: Tasks answers "" for a 🏁 delete to-do — the line goes, and no
+          blank line is left behind (CRLF notes included) */
+  {
+    const run = async (text, line, raw) => {
+      const app = makeApp({ 'Work.md': text }, { 'obsidian-tasks-plugin': { apiV1: { executeToggleTaskDoneCommand: () => '' } } });
+      const r = await makeStore({ app, settings: {} }).tick({ source: 'tasks', path: 'Work.md', line, raw }, '2026-10-07');
+      return [r, app.files.get('Work.md')];
+    };
+    assert.deepStrictEqual(await run('- [ ] a ⏳ 2026-10-07\n- [ ] Throwaway 🏁 delete ⏳ 2026-10-07\n- [ ] c ⏳ 2026-10-07\n', 1, '- [ ] Throwaway 🏁 delete ⏳ 2026-10-07'),
+      [{ ok: true }, '- [ ] a ⏳ 2026-10-07\n- [ ] c ⏳ 2026-10-07\n']);
+    assert.deepStrictEqual(await run('# A\r\n- [ ] x 🏁 delete\r\nafter\r\n', 1, '- [ ] x 🏁 delete\r'), [{ ok: true }, '# A\r\nafter\r\n']);
+  }
+
+  /* 22. A7: quick-add keeps a CRLF note CRLF even when the Inbox's last line
+         (or the whole note) has no line ending, and a BOM in front of the
+         heading doesn't hide it */
+  {
+    const add = async (text, extra = {}) => {
+      const app = makeApp({ 'Planning/Fortnight.md': text });
+      const r = await makeStore({ app, settings: {} }).add(Object.assign({ text: 'b', date: '2026-10-07' }, extra));
+      return [r, app.files.get('Planning/Fortnight.md')];
+    };
+    /* CRLF, Inbox is the last thing and the file has no final newline: the new line is the new last line */
+    assert.deepStrictEqual(await add('# Fortnight\r\n\r\n## Inbox\r\n- [ ] a'),
+      [{ ok: true, raw: '- [ ] b ⏳ 2026-10-07' }, '# Fortnight\r\n\r\n## Inbox\r\n- [ ] a\r\n- [ ] b ⏳ 2026-10-07']);
+    /* CRLF, no Inbox yet, last line unterminated */
+    assert.deepStrictEqual(await add('# Fortnight\r\nnotes'),
+      [{ ok: true, raw: '- [ ] b ⏳ 2026-10-07\r' }, '# Fortnight\r\nnotes\r\n\r\n## Inbox\r\n- [ ] b ⏳ 2026-10-07\r\n']);
+    /* LF stays LF, with and without a final newline */
+    assert.deepStrictEqual(await add('x\n## Inbox\n- [ ] a'), [{ ok: true, raw: '- [ ] b ⏳ 2026-10-07' }, 'x\n## Inbox\n- [ ] a\n- [ ] b ⏳ 2026-10-07']);
+    /* a BOM before the heading: the Inbox is found, and the BOM stays where it was */
+    assert.deepStrictEqual(await add('﻿## Inbox\n- [ ] a ⏳ 2026-10-07\n\n## Notes\nx\n'),
+      [{ ok: true, raw: '- [ ] b ⏳ 2026-10-07' }, '﻿## Inbox\n- [ ] a ⏳ 2026-10-07\n- [ ] b ⏳ 2026-10-07\n\n## Notes\nx\n']);
+    assert.deepStrictEqual(await add('﻿## Inbox\r\n- [ ] a\r\n'),
+      [{ ok: true, raw: '- [ ] b ⏳ 2026-10-07\r' }, '﻿## Inbox\r\n- [ ] a\r\n- [ ] b ⏳ 2026-10-07\r\n']);
+    /* a BOM and no Inbox: one is added after, the BOM still first */
+    assert.deepStrictEqual(await add('﻿# Plan\nx\n'),
+      [{ ok: true, raw: '- [ ] b ⏳ 2026-10-07' }, '﻿# Plan\nx\n\n## Inbox\n- [ ] b ⏳ 2026-10-07\n']);
+    /* an "## Inbox" inside front matter is not the Inbox */
+    assert.deepStrictEqual(await add('---\n## Inbox\n---\nbody\n'),
+      [{ ok: true, raw: '- [ ] b ⏳ 2026-10-07' }, '---\n## Inbox\n---\nbody\n\n## Inbox\n- [ ] b ⏳ 2026-10-07\n']);
+  }
+
+  /* 22b. F3/contract 5: add says exactly what it wrote — including the \r of a
+          CRLF note, so the board can look for that very raw line */
+  {
+    const app = makeApp({ 'P.md': '## Inbox\r\n- [ ] A\r\n' });
+    const store = makeStore({ app, settings: { plannerNote: 'P.md' } });
+    assert.deepStrictEqual(await store.add({ text: 'File tax 📅 2026-10-31', date: '2026-10-02' }), { ok: true, raw: '- [ ] File tax 📅 2026-10-31 ⏳ 2026-10-02\r' });
+    const fresh = makeApp({});
+    assert.deepStrictEqual(await makeStore({ app: fresh, settings: {} }).add({ text: 'Plan the trip', slot: 'nextWeek', monday: '2026-10-12' }), { ok: true, raw: '- [ ] Plan the trip 🛫 2026-10-12' });
+    assert.deepStrictEqual(await makeStore({ app: fresh, settings: {} }).add({ text: '   ', date: '2026-10-02' }), { ok: false, reason: 'empty' });
+    /* and the line it says is the line load() then reads back */
+    const back = (await makeStore({ app: fresh, settings: {} }).load()).map(t => t.raw);
+    assert.deepStrictEqual(back, ['- [ ] Plan the trip 🛫 2026-10-12']);
+  }
+
+  /* 23. A8: a practice already DONE on a day can't be promised to that day —
+         it would sit in both lists and Rhythm would key two cards the same.
+         Refused from the tray and between days; the old day keeps its promise. */
+  {
+    const files = () => ({
+      'Rhythm/Log/2026-10-01.md': '---\nrhythm: log\ndone: [Gym]\n---\n',
+      'Rhythm/Log/2026-10-02.md': '---\nrhythm: log\nplan: [Gym]\n---\n',
+      'Rhythm/Log/2026-10-03.md': '---\nrhythm: log\ndone:\n  - Gym\n---\n',
+    });
+    const app = makeApp(files(), rhythm);
+    const store = makeStore({ app, settings: {} });
+    assert.deepStrictEqual(await store.move({ source: 'practice', text: 'Gym', path: 'p', fromTray: true }, '2026-10-01'), { ok: false, reason: 'done-that-day' });
+    assert.deepStrictEqual(await store.move({ source: 'practice', text: 'Gym', path: 'p', date: '2026-10-02' }, '2026-10-01'), { ok: false, reason: 'done-that-day' });
+    assert.deepStrictEqual(await store.move({ source: 'practice', text: 'Gym', path: 'p', fromTray: true }, '2026-10-03'), { ok: false, reason: 'done-that-day' });
+    for (const [path, text] of Object.entries(files())) assert.strictEqual(app.files.get(path), text, path);
+    /* another practice, or the same one on a day it isn't done: fine */
+    assert.deepStrictEqual(await store.move({ source: 'practice', text: 'Paint', path: 'p', fromTray: true }, '2026-10-01'), { ok: true });
+    assert.strictEqual(app.files.get('Rhythm/Log/2026-10-01.md'), '---\nrhythm: log\ndone: [Gym]\nplan: [Paint]\n---\n');
+    assert.deepStrictEqual(await store.move({ source: 'practice', text: 'Gym', path: 'p', date: '2026-10-02' }, '2026-10-04'), { ok: true });
+    assert.strictEqual(app.files.get('Rhythm/Log/2026-10-04.md'), '---\nrhythm: log\ndone: []\nplan: [Gym]\n---\n');
+  }
+
+  /* 24. A9: the review goes to Rhythm's log only when Rhythm's folder is
+         really there. Rhythm switched on but never set up: Reviews/, and no
+         Rhythm folder is made behind its back (that would hide its setup). */
+  {
+    const parts = { done: [], moved: [], dropped: [], left: 0, reflection: '' };
+    const app = makeApp({ 'Home.md': 'x' }, rhythm);
+    const store = makeStore({ app, settings: {} });
+    assert.deepStrictEqual(await store.reviewTarget('2026-09-30', '21:00'), { ok: true, path: 'Reviews/2026-09-30.md', heading: '## Review' });
+    assert.deepStrictEqual(await store.writeReview('2026-09-30', parts, '21:00'), { ok: true, path: 'Reviews/2026-09-30.md' });
+    assert.strictEqual(app.files.get('Reviews/2026-09-30.md'), '## Review\n- Nothing left open.\n');
+    assert.strictEqual(app.vault.getFolderByPath('Rhythm'), null);
+    /* with the folder there, as before */
+    const set = makeApp({ 'Rhythm/Areas/Body.md': '---\nrhythm: area\n---\n' }, rhythm);
+    assert.deepStrictEqual(await makeStore({ app: set, settings: {} }).reviewTarget('2026-09-30', '21:00'), { ok: true, path: 'Rhythm/Log/2026-09-30.md', heading: '## Review' });
+    /* and the setting wins either way */
+    assert.deepStrictEqual(await makeStore({ app: set, settings: { reviewFolder: 'Journal' } }).reviewTarget('2026-09-30', '21:00'), { ok: true, path: 'Journal/2026-09-30.md', heading: '## Review' });
+  }
+
+  /* 25. A10: a folder that appears between our check and our createFolder
+         (sync, a second add) is not an error; a real failure still is */
+  {
+    const racy = app => { const orig = app.vault.createFolder; app.vault.createFolder = async p => { await orig(p); throw new Error('Folder already exists.'); }; return app; };
+    const a = racy(makeApp({}));
+    assert.deepStrictEqual(await makeStore({ app: a, settings: {} }).add({ text: 'X', date: '2026-10-01' }), { ok: true, raw: '- [ ] X ⏳ 2026-10-01' });
+    assert.strictEqual(a.files.get('Planning/Fortnight.md'), '# Fortnight\n\n## Inbox\n- [ ] X ⏳ 2026-10-01\n');
+    const b = racy(makeApp({}, rhythm));
+    assert.deepStrictEqual(await makeStore({ app: b, settings: {} }).move({ source: 'practice', text: 'Gym', path: 'p', fromTray: true }, '2026-10-01'), { ok: true });
+    assert.strictEqual(b.files.get('Rhythm/Log/2026-10-01.md'), '---\nrhythm: log\ndone: []\nplan: [Gym]\n---\n');
+    const c = racy(makeApp({}));
+    assert.deepStrictEqual(await makeStore({ app: c, settings: {} }).writeReview('2026-09-30', { done: [], moved: [], dropped: [], left: 0, reflection: '' }, '21:00'), { ok: true, path: 'Reviews/2026-09-30.md' });
+    const broken = makeApp({});
+    broken.vault.createFolder = async () => { throw new Error('EACCES'); };
+    await assert.rejects(makeStore({ app: broken, settings: {} }).add({ text: 'X', date: '2026-10-01' }), /EACCES/);
+  }
+
+  /* 25b. the stand-in itself behaves as Obsidian does where it matters here */
+  {
+    const app = makeApp({ 'A.md': 'x', 'F/B.md': 'y' });
+    await assert.rejects(app.vault.create('A.md', 'z'), /already exists/);
+    await assert.rejects(app.vault.createFolder('F'), /already exists/);
+    await app.vault.createFolder('G');
+    await assert.rejects(app.vault.createFolder('G'), /already exists/);
+  }
+
+  /* 26. F1/contract 4: a 🔁 to-do can't go to Later — its ⏳ would be stripped
+         and Tasks needs a date on a repeat. Next week (🛫) is fine. */
+  {
+    const app = makeApp({ 'H.md': '- [ ] Take the bins out ⏳ 2026-10-07 🔁 every week\n- [ ] Pills 🔁 every day 📅 2026-09-01' });
+    const store = makeStore({ app, settings: {} });
+    const bins = { source: 'tasks', path: 'H.md', line: 0, raw: '- [ ] Take the bins out ⏳ 2026-10-07 🔁 every week' };
+    assert.deepStrictEqual(await store.park(bins, 'later', undefined, '2026-10-07'), { ok: false, reason: 'repeats' });
+    assert.deepStrictEqual(await store.park({ source: 'tasks', path: 'H.md', line: 1, raw: '- [ ] Pills 🔁 every day 📅 2026-09-01' }, 'later', undefined, '2026-10-07'), { ok: false, reason: 'repeats' });
+    assert.strictEqual(app.files.get('H.md'), '- [ ] Take the bins out ⏳ 2026-10-07 🔁 every week\n- [ ] Pills 🔁 every day 📅 2026-09-01');
+    assert.deepStrictEqual(await store.park(bins, 'nextWeek', '2026-10-12', '2026-10-07'), { ok: true });
+    assert.strictEqual(app.files.get('H.md'), '- [ ] Take the bins out 🔁 every week 🛫 2026-10-12\n- [ ] Pills 🔁 every day 📅 2026-09-01');
+  }
+
+  /* 27. an editLine that Tasks answers with several lines still replaces just
+         the one (unchanged), and a tick with no `today` still dates itself */
+  {
+    const app = makeApp({ 'H.md': '- [ ] Call plumber' });
+    await makeStore({ app, settings: {} }).tick({ source: 'tasks', path: 'H.md', line: 0, raw: '- [ ] Call plumber' });
+    assert.ok(/^- \[x\] Call plumber ✅ \d{4}-\d{2}-\d{2}$/.test(app.files.get('H.md')), app.files.get('H.md'));
   }
 
   console.log('store-write OK');

@@ -1,7 +1,9 @@
 'use strict';
 /* Settings: the welcome, and which folders stay off the board. */
 
-const { PluginSettingTab, Setting } = require('obsidian');
+const { PluginSettingTab, Setting, normalizePath } = require('obsidian');
+const { DEFAULT_SETTINGS } = require('./constants');
+const { tidyPath, folderLines } = require('./board-helpers');
 
 class FortnightSettingTab extends PluginSettingTab {
   constructor(app, plugin) {
@@ -49,7 +51,9 @@ class FortnightSettingTab extends PluginSettingTab {
         .setPlaceholder('Planning/Fortnight.md')
         .setValue(this.plugin.settings.plannerNote || '')
         .onChange(async v => {
-          this.plugin.settings.plannerNote = v.trim() || 'Planning/Fortnight.md';
+          /* Tidied as Obsidian tidies a path (one kind of slash, none at the
+             ends); the box keeps what was typed. */
+          this.plugin.settings.plannerNote = tidyPath(v, normalizePath, true) || DEFAULT_SETTINGS.plannerNote;
           await this.plugin.saveSettings();
           this.warnIfHidden(warning);
         }));
@@ -61,7 +65,7 @@ class FortnightSettingTab extends PluginSettingTab {
       .addText(t => t
         .setPlaceholder('Rhythm/Log')
         .setValue(this.plugin.settings.reviewFolder || '')
-        .onChange(async v => { this.plugin.settings.reviewFolder = v.trim(); await this.plugin.saveSettings(); }));
+        .onChange(async v => { this.plugin.settings.reviewFolder = tidyPath(v, normalizePath); await this.plugin.saveSettings(); }));
     new Setting(containerEl)
       .setName('Later: also show undated to-dos from')
       .setDesc('Later always shows the planner note\'s undated to-dos. Add folders here to include theirs too. One folder per line.')
@@ -69,7 +73,7 @@ class FortnightSettingTab extends PluginSettingTab {
         .setPlaceholder('Projects')
         .setValue((this.plugin.settings.laterFolders || []).join('\n'))
         .onChange(async v => {
-          this.plugin.settings.laterFolders = v.split('\n').map(x => x.trim()).filter(Boolean);
+          this.plugin.settings.laterFolders = folderLines(v, normalizePath);
           await this.plugin.saveSettings();
         }));
     new Setting(containerEl)
@@ -91,7 +95,7 @@ class FortnightSettingTab extends PluginSettingTab {
         .setPlaceholder('Templates')
         .setValue((this.plugin.settings.excludeFolders || []).join('\n'))
         .onChange(async v => {
-          this.plugin.settings.excludeFolders = v.split('\n').map(x => x.trim()).filter(Boolean);
+          this.plugin.settings.excludeFolders = folderLines(v, normalizePath);
           await this.plugin.saveSettings();
           this.warnIfHidden(warning);
         }));

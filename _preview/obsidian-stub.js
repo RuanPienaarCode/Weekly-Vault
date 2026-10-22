@@ -3,7 +3,9 @@
    adds the same ones so the REAL src/ view renders unchanged. */
 const proto = HTMLElement.prototype;
 if (!proto.createEl) {
-  proto.createEl = function (tag, o = {}) {
+  /* On Node, as in Obsidian: a DocumentFragment (a Notice's body) has them too. */
+  const node = Node.prototype;
+  node.createEl = function (tag, o = {}) {
     const el = document.createElement(tag);
     if (o.cls) el.className = Array.isArray(o.cls) ? o.cls.filter(Boolean).join(' ') : o.cls;
     if (o.text != null) el.textContent = o.text;
@@ -11,8 +13,8 @@ if (!proto.createEl) {
     this.appendChild(el);
     return el;
   };
-  proto.createDiv = function (o) { return this.createEl('div', typeof o === 'string' ? { cls: o } : o); };
-  proto.createSpan = function (o) { return this.createEl('span', typeof o === 'string' ? { cls: o } : o); };
+  node.createDiv = function (o) { return this.createEl('div', typeof o === 'string' ? { cls: o } : o); };
+  node.createSpan = function (o) { return this.createEl('span', typeof o === 'string' ? { cls: o } : o); };
   proto.setText = function (t) { this.textContent = t; };
   proto.empty = function () { while (this.firstChild) this.removeChild(this.firstChild); };
   proto.addClass = function (...c) { this.classList.add(...c); };
@@ -20,9 +22,13 @@ if (!proto.createEl) {
   proto.toggleClass = function (c, on) { this.classList.toggle(c, on); };
 }
 
+/* Obsidian's global fragment builder (Notice bodies use it). */
+if (!window.createFragment) window.createFragment = cb => { const f = document.createDocumentFragment(); if (cb) cb(f); return f; };
+
 export class Plugin {}
 export class ItemView {
-  constructor(leaf) { this.leaf = leaf; this.contentEl = (leaf && leaf.contentEl) || document.createElement('div'); }
+  constructor(leaf) { this.leaf = leaf; this.app = leaf && leaf.app; this.contentEl = (leaf && leaf.contentEl) || document.createElement('div'); }
+  registerEvent(ref) { (this._refs = this._refs || []).push(ref); return ref; }
 }
 export class PluginSettingTab {}
 export class Setting {}
@@ -65,7 +71,8 @@ export class Notice {
   hide() { this.el.remove(); }
 }
 /* A text glyph per icon name, so icon-only buttons are visible here. */
-const GLYPH = { inbox: '▭', 'calendar-range': '▦', plus: '+', circle: '○', 'check-circle-2': '✓', lock: '🔒', bell: '🔔', repeat: '↻', sun: '☀', calendar: '▦' };
+const GLYPH = { inbox: '▭', 'calendar-range': '▦', plus: '+', circle: '○', 'check-circle-2': '✓', lock: '🔒', bell: '🔔', repeat: '↻', sun: '☀', calendar: '▦', 'more-horizontal': '⋯' };
 export function setIcon(el, name) { el.textContent = GLYPH[name] || ''; }
 export const Platform = { isMobile: new URLSearchParams(location.search).get('mobile') === '1', isPhone: new URLSearchParams(location.search).get('mobile') === '1' };
-export const normalizePath = p => p.replace(/\\/g, '/').replace(/\/+$/, '');
+/* As Obsidian's: one kind of slash, none doubled or at either end; nothing left is "/". */
+export const normalizePath = p => p.replace(/[\\/]+/g, '/').replace(/^\/+|\/+$/g, '') || '/';
