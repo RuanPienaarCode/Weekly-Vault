@@ -1,6 +1,6 @@
 'use strict';
 /* The plugin shell as Obsidian sees it: loading the built main.js registers
-   the Fortnight view, an "Open Fortnight" command and a ribbon icon, and the
+   the Fortnight view, an "Open board" command and a ribbon icon, and the
    command opens that view. Runs against the real bundle, so it needs a build. */
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -57,7 +57,7 @@ Module._load = function (request, ...rest) { return request === 'obsidian' ? stu
 
     const open = p.commands.find(c => c.id === 'open');
     assert.ok(open, 'an "open" command is registered');
-    assert.strictEqual(open.name, 'Open Fortnight');
+    assert.strictEqual(open.name, 'Open board');
     assert.deepStrictEqual(p.ribbons.map(r => r.icon), ['calendar-range']);
 
     await open.callback();

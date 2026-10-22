@@ -17,6 +17,14 @@ function fromISO(iso) {
 
 const todayISO = now => toISO(now instanceof Date ? now : new Date());
 
+/* A day that exists: 'YYYY-MM-DD' that survives a round trip. 2026-09-31 is
+   shaped like a date but rolls over to 1 Oct, so it fails here — a line can
+   say anything after ⏳, and the board must not trust it. */
+function isDate(iso) {
+  const d = fromISO(iso);
+  return !!d && toISO(d) === iso;
+}
+
 function addDays(iso, n) {
   const d = fromISO(iso);
   d.setDate(d.getDate() + n);
@@ -38,6 +46,7 @@ function weekStart(iso, start = 1) {
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const dayNum = iso => String(+iso.slice(8, 10));
-const short = iso => `${dayNum(iso)} ${MON[+iso.slice(5, 7) - 1]}`;
+/* An impossible day (2026-13-01) is shown as written, not as "1 undefined". */
+const short = iso => (isDate(iso) ? `${dayNum(iso)} ${MON[+iso.slice(5, 7) - 1]}` : String(iso || ''));
 
-module.exports = { toISO, fromISO, todayISO, addDays, diffDays, weekday, weekStart, DOW, dayNum, short };
+module.exports = { toISO, fromISO, todayISO, isDate, addDays, diffDays, weekday, weekStart, DOW, dayNum, short };

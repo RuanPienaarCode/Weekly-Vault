@@ -2,7 +2,10 @@
 /* Bundle-safety gates for the real mobile floor (iOS 15 WebKit):
    1. no lookbehind regex literals in src/;  2. no Node APIs in src/;
    3. no innerHTML assignment;  4. the built main.js (when present) evaluates
-   against an obsidian stub and exports a Plugin subclass. */
+   against an obsidian stub and exports a Plugin subclass.
+   The stylesheet's iOS gates (color-mix, :has, container queries, inset,
+   !important) and the host-class collision scan of src/*.js live in
+   css-guard.test.cjs. */
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');

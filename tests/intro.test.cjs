@@ -78,4 +78,21 @@ assert.strictEqual(shouldShowIntro({ showWelcome: true, lastWelcome: '2026-09-26
 assert.strictEqual(shouldShowIntro({ showWelcome: false, lastWelcome: '' }, '2026-09-27'), false);
 assert.strictEqual(shouldShowIntro({}, '2026-09-27'), true);
 
+/* 7. B2: on the Sunday the board jumps a week, so an overdue to-do parked
+      for the coming Monday is Slipped THAT day — the welcome counts it (it
+      used to fall into Later, and the count missed it) */
+{
+  const { planBoard } = require('../src/plan');
+  const t = (raw, line) => ({ path: 'A.md', line, raw });
+  const sunday = planBoard({ today: '2026-10-04', settings: {}, tasks: [
+    t('- [ ] Missed Saturday ⏳ 2026-10-03', 1),
+    t('- [ ] Licence disc 📅 2026-07-31 🛫 2026-10-05', 2),
+    t('- [ ] Monday thing ⏳ 2026-10-05', 3),
+  ] });
+  const screens = introScreens(sunday, at('2026-10-04', 8), {});
+  assert.strictEqual(screens.plan.title, 'Plan the week');
+  assert.deepStrictEqual(screens.plan.stats, [{ n: 2, label: 'slipped', slip: true }]);
+  assert.strictEqual(screens.plan.summary, '2 slipped');
+}
+
 console.log('intro OK');

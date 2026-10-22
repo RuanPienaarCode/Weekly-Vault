@@ -22,29 +22,43 @@ class FortnightPlugin extends Plugin {
 
     this.registerView(VIEW_TYPE, leaf => new FortnightView(leaf, this));
     this.addRibbonIcon(ICON, 'Open Fortnight', () => this.activateView());
-    this.addCommand({ id: 'open', name: 'Open Fortnight', callback: () => this.activateView() });
+    this.addCommand({ id: 'open', name: 'Open board', callback: () => this.activateView() });
     this.addCommand({
       id: 'review', name: 'Review today',
-      callback: async () => { await this.activateView(); for (const v of this.boardViews()) v.ctl.openReview(); },
+      callback: async () => { const v = await this.openBoard(); if (v) await v.ctl.openReview(); },
     });
     this.addCommand({
       id: 'welcome', name: 'Show the welcome again',
-      callback: async () => { await this.activateView(); for (const v of this.boardViews()) v.ctl.showIntro(); },
+      callback: async () => { const v = await this.openBoard(); if (v) await v.ctl.showIntro(); },
     });
     this.addSettingTab(new FortnightSettingTab(this.app, this));
 
-    /* Any note edited, anywhere (including on another device via sync):
-       re-read once things settle. The metadata cache fires after it has
-       re-indexed the note's task lines, so the reload sees the new state. */
+    /* A note changed, anywhere (including on another device via sync):
+       re-read once things settle — but only for notes the board could be
+       showing (see store.isRelevant), not every keystroke in every note.
+       The metadata cache fires 'changed' after it has re-indexed a note's
+       task lines. */
     const soon = () => this.refreshSoon();
-    this.registerEvent(this.app.metadataCache.on('changed', soon));
-    this.registerEvent(this.app.vault.on('delete', soon));
-    this.registerEvent(this.app.vault.on('rename', soon));
-    this.registerEvent(this.app.vault.on('create', soon));
-    /* A board restored at startup may render before the metadata cache has
-       indexed the vault; reload once the layout (and cache) are ready. */
-    this.app.workspace.onLayoutReady(() => this.refreshSoon());
-    this.registerEvent(this.app.metadataCache.on('resolved', soon));
+    const relevant = (file, cache) => {
+      const s = this.store;
+      if (!s || typeof s.isRelevant !== 'function') return true;
+      try { return !!s.isRelevant(file, cache); } catch (e) { return true; }
+    };
+    this.registerEvent(this.app.metadataCache.on('changed', (file, data, cache) => { if (relevant(file, cache)) soon(); }));
+    this.registerEvent(this.app.vault.on('delete', file => { if (relevant(file)) soon(); }));
+    this.registerEvent(this.app.vault.on('rename', (file, oldPath) => { if (relevant(file) || relevant({ path: oldPath })) soon(); }));
+    this.app.workspace.onLayoutReady(() => {
+      /* A board restored at startup may render before the metadata cache has
+         indexed the vault; reload once the layout (and cache) are ready. */
+      soon();
+      /* 'create' fires for every file while the vault loads, and 'resolved'
+         after every modification: neither is registered before the layout is
+         ready, and 'resolved' only once (the first full index). */
+      this.registerEvent(this.app.vault.on('create', file => { if (relevant(file)) soon(); }));
+      const mc = this.app.metadataCache;
+      const once = mc.on('resolved', () => { if (mc.offref) mc.offref(once); soon(); });
+      this.registerEvent(once);
+    });
 
     /* Past midnight the board moves on a day (and on Sunday, a week). */
     this._day = D.todayISO();
@@ -81,7 +95,9 @@ class FortnightPlugin extends Plugin {
     await this.app.workspace.getLeaf(false).openFile(file, { eState: { line: card.line } });
   }
 
-  /* Reuse an open Fortnight tab rather than stacking a second one. */
+  /* Reuse an open Fortnight tab rather than stacking a second one. Resolves
+     to the leaf once it is shown — a tab restored at startup is only a
+     placeholder until revealLeaf has loaded it. */
   async activateView() {
     const { workspace } = this.app;
     let leaf = workspace.getLeavesOfType(VIEW_TYPE)[0];
@@ -89,7 +105,15 @@ class FortnightPlugin extends Plugin {
       leaf = workspace.getLeaf('tab');
       await leaf.setViewState({ type: VIEW_TYPE, active: true });
     }
-    workspace.revealLeaf(leaf);
+    if (typeof leaf.loadIfDeferred === 'function') await leaf.loadIfDeferred();
+    await workspace.revealLeaf(leaf);
+    return leaf;
+  }
+
+  /* The open board's view (opening it first), or null. */
+  async openBoard() {
+    const leaf = await this.activateView();
+    return leaf && leaf.view && leaf.view.ctl ? leaf.view : null;
   }
 }
 

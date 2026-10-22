@@ -198,4 +198,105 @@ assert.strictEqual(L.removeTag('- [ ] Read #later #later', '#later'), '- [ ] Rea
 assert.strictEqual(L.hasTag('- [ ] Read #later, then write', '#later'), true);
 assert.strictEqual(L.removeTag('- [ ] Read #later, then write', '#later'), '- [ ] Read, then write');
 
+/* 17. A3: only SPACES between the list marker and the box, as Tasks' own
+       reader needs: Obsidian counts "-<TAB>[ ]" as a task but Tasks does not,
+       and its toggle then falls back to a crude replace that wrote
+       "- [ ]<TAB>[ ] Send invoice" (real Tasks 8.4.0, lane A). Such a line is
+       not read, so it can never be handed to Tasks. A tab in the INDENT is fine. */
+for (const raw of ['-\t[ ] Send invoice', '- \t[ ] Send invoice', '1.\t[ ] Send invoice', '* \t[x] Send invoice']) {
+  assert.strictEqual(L.parseTask(raw), null, JSON.stringify(raw));
+}
+assert.strictEqual(L.setStatus('-\t[ ] Send invoice', 'x'), '-\t[ ] Send invoice');
+assert.strictEqual(L.parseTask('\t- [ ] Nested').text, 'Nested');
+assert.strictEqual(L.parseTask('\t\t1. [ ] Deep').text, 'Deep');
+
+/* 17b. A3: the box must be followed by a space, a tab or the end of the line —
+        "- [ ]x" is not a task to Obsidian (it is a list item with text). */
+for (const raw of ['- [ ]x', '- [x]done', '- [ ]⏳ 2026-10-01', '- [ ]#tag']) assert.strictEqual(L.parseTask(raw), null, raw);
+assert.strictEqual(L.parseTask('- [ ]').text, '');
+assert.strictEqual(L.parseTask('- [ ]\r').text, '');
+assert.strictEqual(L.parseTask('- [ ]\tTabbed text').text, 'Tabbed text');
+assert.strictEqual(L.parseTask('- [x] ').done, true);
+
+/* 18. B8: ✅ is writable, so a tick without Tasks can still date itself */
+assert.strictEqual(L.setField('- [x] Call plumber ⏳ 2026-10-01', 'doneDate', '2026-09-30'), '- [x] Call plumber ⏳ 2026-10-01 ✅ 2026-09-30');
+assert.strictEqual(L.setField('- [x] Call plumber ✅ 2026-09-01', 'doneDate', '2026-09-30'), '- [x] Call plumber ✅ 2026-09-30');
+assert.strictEqual(L.setField('- [x] Call plumber ✅ 2026-09-01', 'doneDate', null), '- [x] Call plumber');
+assert.strictEqual(L.setField('- [x] Call plumber ^abc\r', 'doneDate', '2026-09-30'), '- [x] Call plumber ✅ 2026-09-30 ^abc\r');
+assert.strictEqual(L.parseTask('- [x] Call plumber ✅ 2026-09-30').doneDate, '2026-09-30');
+assert.throws(() => L.setField('- [x] X', 'doneDate', 'today'), /date/);
+
+/* 19. C11/G6/A10: the task lines of a note's TEXT, the way Obsidian counts
+       them: none inside front matter or a fenced code block (``` or ~~~, a
+       fence closes only on the same character and at least as many), and the
+       line is kept with its own \r. Expected line numbers are counted by hand. */
+{
+  const text = [
+    '---', 'tags: [a]', '- [ ] in front matter', '---',          // 0-3
+    '- [ ] real ⏳ 2026-10-01',                                   // 4
+    '```js', '- [ ] in fence', '```',                             // 5-7
+    '~~~', '- [ ] in tilde', '~~~~',                              // 8-10
+    '- [ ] after tilde',                                          // 11
+    '````', '```', '- [ ] still in a long fence', '```', '````',  // 12-16
+    '- [ ] after long',                                           // 17
+    '> ```', '> - [ ] quoted in fence', '> ```',                  // 18-20
+    '- [ ] last',                                                 // 21
+  ].join('\n');
+  assert.deepStrictEqual(L.taskLines(text).map(t => t.line), [4, 11, 17, 21]);
+  assert.deepStrictEqual(L.taskLines(text)[0], { line: 4, raw: '- [ ] real ⏳ 2026-10-01' });
+}
+/* a tilde fence is not closed by a backtick fence; an unclosed fence runs to the end */
+assert.deepStrictEqual(L.taskLines('~~~\n- [ ] x\n```\n- [ ] y\n~~~\n- [ ] z').map(t => t.line), [5]);
+assert.deepStrictEqual(L.taskLines('- [ ] a\n```\n- [ ] b\n- [ ] c').map(t => t.line), [0]);
+/* backticks in a backtick fence's info string: that is inline code, not a fence */
+assert.deepStrictEqual(L.taskLines('```x```\n- [ ] a').map(t => t.line), [1]);
+/* front matter is only front matter at the very top, and only if it closes */
+assert.deepStrictEqual(L.taskLines('- [ ] a\n---\n- [ ] b\n---\n- [ ] c').map(t => t.line), [0, 2, 4]);
+assert.deepStrictEqual(L.taskLines('---\n- [ ] a\n- [ ] b').map(t => t.line), [1, 2]);
+assert.deepStrictEqual(L.taskLines('﻿---\n- [ ] a\n---\n- [ ] b').map(t => t.line), [3]);
+/* CRLF: the \r stays on the raw line, and a CRLF fence still closes */
+assert.deepStrictEqual(L.taskLines('```\r\n- [ ] in\r\n```\r\n- [ ] out\r\n'), [{ line: 3, raw: '- [ ] out\r' }]);
+/* not a task: no space after the box, a tab after the marker */
+assert.deepStrictEqual(L.taskLines('- [ ]x\n-\t[ ] y\n- [ ] z').map(t => t.line), [2]);
+/* the same scanner serves the quick-add heading search */
+assert.deepStrictEqual(L.verbatimLines(['# a', '```', '# b', '```', '# c']), [false, true, true, true, false]);
+
+/* 20. A4: Tasks' global filter — a line is a task to Tasks only when its text
+       after the box contains the filter (Tasks' own includedIn on the body,
+       block reference removed). The box and the list marker are not searched. */
+assert.strictEqual(L.inFilter('- [ ] Buy milk #task', '#task'), true);
+assert.strictEqual(L.inFilter('- [ ] Buy milk', '#task'), false);
+assert.strictEqual(L.inFilter('- [ ] Buy milk', ''), true);
+assert.strictEqual(L.inFilter('- [ ] Buy milk', undefined), true);
+assert.strictEqual(L.inFilter('- [ ] #task ⏳ 2026-10-01 ^abc', '#task'), true);
+assert.strictEqual(L.inFilter('- [x] Buy milk', 'x'), false);
+assert.strictEqual(L.inFilter('- [ ] Buy milk ^task', '^task'), false);
+assert.strictEqual(L.inFilter('not a task line', '#task'), false);
+
+/* 21. G4: the tag matcher is compiled once per (tag, flags), not on every
+       call — and two tags used alternately never get each other's matcher. */
+{
+  const Real = global.RegExp;
+  let made = 0;
+  global.RegExp = new Proxy(Real, { construct(target, args) { made++; return new target(...args); } });
+  try {
+    const rows = [
+      ['- [ ] Read #later', '#later', true, '- [ ] Read'],
+      ['- [ ] Read #someday', '#later', false, '- [ ] Read #someday'],
+      ['- [ ] Read #someday', '#someday', true, '- [ ] Read'],
+      ['- [ ] Read #later', '#someday', false, '- [ ] Read #later'],
+      ['- [ ] Read #LATER, then #someday', '#later', true, '- [ ] Read, then #someday'],
+      ['- [ ] Read #LATER, then #someday', '#someday', true, '- [ ] Read #LATER, then'],
+    ];
+    for (let round = 0; round < 50; round++) {
+      for (const [raw, tag, has, removed] of rows) {
+        assert.strictEqual(L.hasTag(raw, tag), has, `${raw} / ${tag}`);
+        assert.strictEqual(L.removeTag(raw, tag), removed, `${raw} / ${tag}`);
+      }
+    }
+    /* 600 calls, two tags, two flag sets: four compiles at most */
+    assert.ok(made <= 4, `compiled ${made} times`);
+  } finally { global.RegExp = Real; }
+}
+
 console.log('tasks-line OK');

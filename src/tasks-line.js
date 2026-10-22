@@ -12,7 +12,13 @@
    Tasks queries. Reading and editing share ONE scanner, so they can never
    pick different tokens. */
 
-const LINE_RE = /^([\s>]*)([-*+]|\d+[.)])[ \t]+\[([^\]\n])\][ \t]?([^\n]*)$/;
+/* Tasks' own task line: indent (blockquote/callout marks allowed), list
+   marker, SPACES (Obsidian also counts a tab there, but Tasks does not and its
+   toggle then mangles the line), the box, then a space or tab — or the end of
+   the line. "- [ ]x" is a list item with text, not a task. Group 4 is the text
+   after the separator; group 5 is what is left when the box ends the line (a
+   bare CR from a CRLF file). */
+const LINE_RE = /^([\s>]*)([-*+]|\d+[.)]) +\[([^\]\n])\](?:[ \t]([^\n]*)|(\r?))$/;
 
 const DATE = '(\\d{4}-\\d{2}-\\d{2})';
 /* Each field as Tasks spells it (optional U+FE0F, spaces, value), anchored
@@ -45,8 +51,9 @@ const TAIL_RE = /(?:(?:^|\s)\^([A-Za-z0-9-]+))?\s*$/;
 
 /* The emoji Fortnight writes when it adds a field the line doesn't have, and
    what each writable field accepts. */
-const WRITE_MARK = { scheduled: '⏳', start: '🛫', id: '🆔', cancelledDate: '❌' };
-const VALID = { scheduled: /^\d{4}-\d{2}-\d{2}$/, start: /^\d{4}-\d{2}-\d{2}$/, id: /^[A-Za-z0-9_-]+$/, cancelledDate: /^\d{4}-\d{2}-\d{2}$/ };
+const WRITE_MARK = { scheduled: '⏳', start: '🛫', id: '🆔', cancelledDate: '❌', doneDate: '✅' };
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const VALID = { scheduled: ISO_DATE, start: ISO_DATE, id: /^[A-Za-z0-9_-]+$/, cancelledDate: ISO_DATE, doneDate: ISO_DATE };
 
 /* Split a line into its parts, with every field token's position in raw.
    Walking back from the end, the first hit is the rightmost token; when a
@@ -55,7 +62,8 @@ const VALID = { scheduled: /^\d{4}-\d{2}-\d{2}$/, start: /^\d{4}-\d{2}-\d{2}$/, 
 function scan(raw) {
   const m = LINE_RE.exec(raw);
   if (!m) return null;
-  const [, indent, marker, status, rest] = m;
+  const [, indent, marker, status] = m;
+  const rest = m[4] !== undefined ? m[4] : m[5];
   const base = raw.length - rest.length;
   const tail = TAIL_RE.exec(rest);
   const tokens = {};
@@ -126,8 +134,22 @@ function setField(raw, name, value) {
 }
 
 /* One whole tag, case-insensitive: "#later" but never "#laterish" or
-   "#later/sub". A lookahead (not lookbehind) is fine on iOS 15. */
-const tagRe = (tag, flags) => new RegExp(`(^|[ \\t])(${String(tag).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?=[ \\t\\r,.;:!?)\\]]|$)`, flags);
+   "#later/sub". A lookahead (not lookbehind) is fine on iOS 15.
+   Compiled once per (tag, flags): the board asks about the same one or two
+   tags for every card on every redraw. A global matcher keeps a lastIndex, so
+   it is only ever used through String.replace (which resets it), never .test. */
+const TAG_RES = new Map();
+function tagRe(tag, flags) {
+  const key = `${flags}\u0000${tag}`;
+  let re = TAG_RES.get(key);
+  if (!re) {
+    /* The tag comes from a setting: a handful at most, but never unbounded. */
+    if (TAG_RES.size >= 32) TAG_RES.clear();
+    re = new RegExp(`(^|[ \\t])(${String(tag).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?=[ \\t\\r,.;:!?)\\]]|$)`, flags);
+    TAG_RES.set(key, re);
+  }
+  return re;
+}
 
 const hasTag = (raw, tag) => tagRe(tag, 'i').test(String(raw));
 
@@ -167,4 +189,66 @@ function setStatus(raw, ch) {
    Fortnight doesn't know. Done is [x]/[X]; cancelled is [-]. */
 const isOpen = t => !!t && !t.done && !t.cancelled;
 
-module.exports = { parseTask, isOpen, setField, setStatus, addTag, removeTag, hasTag, PRIORITY_RANK };
+/* ---- reading a note's text -------------------------------------------------
+
+   Obsidian's metadata cache can lag a write (a line number from it may point
+   at the wrong line for a moment), so the store reads the note's TEXT and
+   finds the task lines itself — with the same rules Obsidian counts them by:
+   nothing inside front matter or a fenced code block. The same scanner tells
+   quick-add which "#" lines are really headings. */
+
+/* An opening or closing fence: up to a quote mark or indent, then 3+ backticks
+   or tildes, then whatever follows on the line. */
+const FENCE_RE = /^[\s>]*(`{3,}|~{3,})(.*)$/;
+
+/* One flag per line: true for front matter and fenced code (the fence lines
+   themselves included) — text that is not the note's markdown body. A fence
+   closes on the same character with at least as many marks and nothing else;
+   one that never closes runs to the end of the note. A backtick fence cannot
+   have backticks in its info string (that is inline code). Front matter is a
+   "---" first line (a BOM before it is ignored) closed by a later "---" or
+   "..." line; without a closing line the first line is just a rule. */
+function verbatimLines(lines) {
+  const flags = new Array(lines.length).fill(false);
+  const bare = i => String(lines[i]).replace(/\r$/, '');
+  let from = 0;
+  if (lines.length && bare(0).replace(/^﻿/, '').trimEnd() === '---') {
+    for (let i = 1; i < lines.length; i++) {
+      const l = bare(i).trimEnd();
+      if (l === '---' || l === '...') { for (let j = 0; j <= i; j++) flags[j] = true; from = i + 1; break; }
+    }
+  }
+  let open = null;
+  for (let i = from; i < lines.length; i++) {
+    const m = FENCE_RE.exec(bare(i));
+    if (open) {
+      flags[i] = true;
+      if (m && m[1][0] === open.ch && m[1].length >= open.len && m[2].trim() === '') open = null;
+    } else if (m && !(m[1][0] === '`' && m[2].includes('`'))) {
+      open = { ch: m[1][0], len: m[1].length };
+      flags[i] = true;
+    }
+  }
+  return flags;
+}
+
+/* Every task line of a note's text as { line, raw } (raw keeps its own \r). */
+function taskLines(text) {
+  const lines = String(text == null ? '' : text).split('\n');
+  const skip = verbatimLines(lines);
+  const out = [];
+  for (let i = 0; i < lines.length; i++) if (!skip[i] && LINE_RE.test(lines[i])) out.push({ line: i, raw: lines[i] });
+  return out;
+}
+
+/* Tasks' global filter: a line is a task to Tasks only if the text after the
+   box (block reference taken off) contains the filter. Empty = every line. */
+function inFilter(raw, filter) {
+  if (!filter) return true;
+  const m = LINE_RE.exec(String(raw));
+  if (!m) return false;
+  const body = (m[4] !== undefined ? m[4] : m[5]).trim().replace(/ \^[a-zA-Z0-9-]+$/, '').trim();
+  return body.includes(filter);
+}
+
+module.exports = { parseTask, isOpen, setField, setStatus, addTag, removeTag, hasTag, taskLines, verbatimLines, inFilter, PRIORITY_RANK };
