@@ -2,7 +2,7 @@
 # Report whether src/rhythm/ still matches a local Rhythm checkout.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-RHYTHM="${RHYTHM_REPO:-$HOME/Github/rhythm-vault}"
+RHYTHM="${RHYTHM_REPO:-$HOME/Dev/Obsidian Plugins/rhythm-vault}"
 [ -d "$RHYTHM/src" ] || { echo "No Rhythm checkout at $RHYTHM (set RHYTHM_REPO)"; exit 0; }
 drift=0
 for f in model.js dates.js markdown.js; do
